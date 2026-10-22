@@ -23,12 +23,22 @@ class AppConfig(BaseSettings):
         alias="OPENAI_API_KEY",
         description="OpenAI API key for GPT-4o-mini generation"
     )
+    gemini_api_key: str = Field(
+        default="",
+        alias="GEMINI_API_KEY",
+        description="Google Gemini free API key from aistudio.google.com"
+    )
 
     # 2. Free Visual Stock Assets
     pexels_api_key: str = Field(
         default="",
         alias="PEXELS_API_KEY",
         description="Pexels API key for HD video clips"
+    )
+    pixabay_api_key: str = Field(
+        default="",
+        alias="PIXABAY_API_KEY",
+        description="Pixabay free API key for HD stock videos"
     )
 
     # 3. YouTube Data API v3 & OAuth 2.0

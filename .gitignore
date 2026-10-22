@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Secrets & Credentials
+.env
+*.pem
+client_secret*.json
+token.json
+credentials.json
+
+# Generated Media Assets
+*.mp4
+*.mp3
+*.wav
+*.aac
+*.jpg
+*.jpeg
+*.png
+*.webp
+assets/downloads/
+output/
+temp/
+
+# Logs & Runtime
+*.log
+logs/
+metadata.json
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

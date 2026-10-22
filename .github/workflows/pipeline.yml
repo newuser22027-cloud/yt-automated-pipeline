@@ -1,0 +1,87 @@
+name: YouTube Automated Content Pipeline
+
+on:
+  schedule:
+    # Triggers daily at 12:00 UTC (adjust to your preferred audience peak time)
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry Run (Render video without publishing to YouTube)'
+        required: false
+        default: false
+        type: boolean
+      custom_niche:
+        description: 'Custom topic niche override (leave empty for default)'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: youtube-pipeline
+  cancel-in-progress: false
+
+jobs:
+  generate-and-publish:
+    name: Generate & Publish Daily Video
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install System Dependencies (FFmpeg)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libsm6 libxext6
+
+      - name: Upgrade Pip & Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Modular Health Checks
+        run: |
+          python -m pytest tests/test_pipeline.py -v -k "not test_procedural_video_generation and not test_audio_synthesis"
+
+      - name: Execute Video Generation & Publishing Pipeline
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          YOUTUBE_CLIENT_SECRET_JSON: ${{ secrets.YOUTUBE_CLIENT_SECRET_JSON }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          AMAZON_AFFILIATE_TAG: ${{ secrets.AMAZON_AFFILIATE_TAG }}
+          VIDIQ_AFFILIATE_ID: ${{ secrets.VIDIQ_AFFILIATE_ID }}
+          VIDEO_NICHE: ${{ secrets.VIDEO_NICHE }}
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+          CUSTOM_NICHE_INPUT: ${{ inputs.custom_niche }}
+        run: |
+          EXTRA_ARGS=""
+          if [ "$DRY_RUN_INPUT" = "true" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --dry-run"
+          fi
+          if [ -n "$CUSTOM_NICHE_INPUT" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --niche '$CUSTOM_NICHE_INPUT'"
+          fi
+          
+          python main.py $EXTRA_ARGS
+
+      - name: Archive Video & Log Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-output-and-logs
+          path: |
+            logs/
+            output/
+          retention-days: 7

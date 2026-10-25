@@ -82,6 +82,7 @@ def execute_pipeline(
                 audio_path=audio_path,
                 video_path=video_stock_path,
                 title_text=content["title"],
+                script_text=content["script"],
                 output_path=output_video_path
             )
             if output_video_path.exists() and output_video_path.stat().st_size > 0:

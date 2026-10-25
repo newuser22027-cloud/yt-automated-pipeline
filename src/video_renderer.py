@@ -1,8 +1,10 @@
 """
 Video Renderer Module.
-Assembles vertical 9:16 (1080x1920) YouTube Shorts using MoviePy and FFmpeg.
-Includes smart auto-framing, robust clip looping, and resilient Pillow-backed text overlays.
-Fully compatible with both MoviePy v1 and MoviePy v2+.
+Assembles viral 1080x1920 vertical YouTube Shorts with:
+1. Real cinematic HD stock video background (smart auto-cropped to 9:16)
+2. Dynamic animated word-by-word / phrase-by-phrase captions (Hormozi style)
+3. Balanced background ambient music (ducked under neural voiceover)
+4. Sleek top-header category pill
 """
 
 import os
@@ -10,29 +12,32 @@ from pathlib import Path
 from typing import Optional, List, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
-# Universal MoviePy imports (MoviePy v1 and v2)
+# Universal MoviePy imports
 try:
     from moviepy.editor import (
         VideoFileClip,
         AudioFileClip,
         CompositeVideoClip,
+        CompositeAudioClip,
         ImageClip,
-        concatenate_videoclips
+        concatenate_videoclips,
+        afx
     )
 except ImportError:
     from moviepy import (
         VideoFileClip,
         AudioFileClip,
         CompositeVideoClip,
+        CompositeAudioClip,
         ImageClip,
-        concatenate_videoclips
+        concatenate_videoclips,
+        afx
     )
 
 from src.config import config
 from utils.logger import logger
 
 
-# Helper functions to normalize MoviePy 1 vs MoviePy 2 API differences
 def _clip_subclip(clip, start_time: float, end_time: float):
     if hasattr(clip, "subclipped"):
         return clip.subclipped(start_time, end_time)
@@ -57,6 +62,14 @@ def _clip_with_position(clip, position):
     return clip.set_pos(position)
 
 
+def _clip_with_start(clip, start_time: float):
+    if hasattr(clip, "with_start_time"):
+        return clip.with_start_time(start_time)
+    if hasattr(clip, "with_start"):
+        return clip.with_start(start_time)
+    return clip.set_start(start_time)
+
+
 def _clip_resize(clip, width: Optional[int] = None, height: Optional[int] = None):
     if hasattr(clip, "resized"):
         if width is not None and height is not None:
@@ -65,7 +78,6 @@ def _clip_resize(clip, width: Optional[int] = None, height: Optional[int] = None
             return clip.resized(height=height)
         if width is not None:
             return clip.resized(width=width)
-    # MoviePy 1 fallback
     if width is not None and height is not None:
         return clip.resize(newsize=(width, height))
     if height is not None:
@@ -82,9 +94,6 @@ def _clip_crop(clip, x1: int, y1: int, x2: int, y2: int):
 
 
 def _loop_clip(clip, target_duration: float):
-    """
-    Universally loops a video clip to fill target duration.
-    """
     if clip.duration >= target_duration:
         return _clip_subclip(clip, 0, target_duration)
     repeats = int(target_duration // clip.duration) + 2
@@ -92,8 +101,19 @@ def _loop_clip(clip, target_duration: float):
     return _clip_subclip(looped, 0, target_duration)
 
 
+def _set_volume(audio_clip, volume_factor: float):
+    if hasattr(audio_clip, "with_effects"):
+        try:
+            return audio_clip.with_effects([afx.MultiplyVolume(volume_factor)])
+        except Exception:
+            pass
+    if hasattr(audio_clip, "volumex"):
+        return audio_clip.volumex(volume_factor)
+    return audio_clip
+
+
 class VideoRenderer:
-    """Assembles and exports 1080x1920 vertical videos for YouTube Shorts."""
+    """Assembles professional high-retention 1080x1920 vertical videos."""
 
     TARGET_WIDTH = 1080
     TARGET_HEIGHT = 1920
@@ -104,58 +124,77 @@ class VideoRenderer:
         audio_path: Path,
         video_path: Path,
         title_text: Optional[str] = None,
+        script_text: Optional[str] = None,
         output_path: Optional[Path] = None
     ) -> Path:
         """
-        Renders complete vertical video with synchronized audio and hook overlay.
+        Renders complete vertical video with synchronized audio, dynamic captions,
+        ambient music, and smart framing.
         """
         audio_path = Path(audio_path)
         video_path = Path(video_path)
         output_path = output_path or (config.output_dir / "final_output.mp4")
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Initiating video render -> Output: {output_path}")
+        logger.info(f"Initiating high-retention video render -> Output: {output_path}")
 
-        audio_clip = None
+        voice_clip = None
+        music_clip = None
+        combined_audio = None
         video_clip = None
         final_clip = None
-        title_clip = None
+        caption_clips = []
+        header_clip = None
 
         try:
-            # 1. Load Audio
-            audio_clip = AudioFileClip(str(audio_path))
-            target_duration = audio_clip.duration
-            logger.info(f"Target video duration determined by audio: {target_duration:.2f} seconds")
+            # 1. Voiceover Audio
+            voice_clip = AudioFileClip(str(audio_path))
+            target_duration = voice_clip.duration
+            logger.info(f"Audio voiceover duration: {target_duration:.2f} seconds")
 
-            # 2. Load and Prepare Video Clip
+            # 2. Ambient Background Music Mixing
+            ambient_music_path = config.base_dir / "assets" / "ambient_music.mp3"
+            if ambient_music_path.exists():
+                try:
+                    music_clip = AudioFileClip(str(ambient_music_path))
+                    music_clip = _loop_clip(music_clip, target_duration)
+                    # Duck music volume to 12% so voiceover is crisp & prominent
+                    music_clip = _set_volume(music_clip, 0.12)
+                    combined_audio = CompositeAudioClip([voice_clip, music_clip])
+                except Exception as e:
+                    logger.warning(f"Audio mixing issue: {e}. Using voiceover track directly.")
+                    combined_audio = voice_clip
+            else:
+                combined_audio = voice_clip
+
+            # 3. Stock Footage Preparation (Smart 9:16 Vertical Crop)
             video_clip = VideoFileClip(str(video_path))
-
-            # Auto-loop or trim video to match exact audio duration
             if video_clip.duration < target_duration:
-                logger.info(f"Video ({video_clip.duration:.1f}s) shorter than audio ({target_duration:.1f}s). Looping...")
                 video_clip = _loop_clip(video_clip, target_duration)
             else:
                 video_clip = _clip_subclip(video_clip, 0, target_duration)
 
-            # 3. Smart Framing & Aspect Ratio Conversion to 1080x1920 (9:16)
             video_clip = self._fit_vertical(video_clip)
+            video_clip = _clip_with_audio(video_clip, combined_audio)
 
-            # Attach voiceover audio track
-            video_clip = _clip_with_audio(video_clip, audio_clip)
-
-            # 4. Optional Title Hook Overlay (Pillow-backed transparent overlay)
             layers = [video_clip]
-            if title_text:
-                title_overlay_path = self._create_title_overlay_image(title_text)
-                if title_overlay_path and title_overlay_path.exists():
-                    title_clip = ImageClip(str(title_overlay_path))
-                    title_clip = _clip_with_duration(title_clip, min(5.0, target_duration))
-                    title_clip = _clip_with_position(title_clip, ("center", 240))
-                    layers.append(title_clip)
+
+            # 4. Top Header Pill Banner
+            header_img = self._create_header_pill(title_text or "DAILY DISCOVERY")
+            if header_img and header_img.exists():
+                header_clip = ImageClip(str(header_img))
+                header_clip = _clip_with_duration(header_clip, target_duration)
+                header_clip = _clip_with_position(header_clip, ("center", 180))
+                layers.append(header_clip)
+
+            # 5. Dynamic Animated Subtitles / Captions (Word/Phrase timing)
+            if script_text:
+                caption_clips = self._generate_caption_clips(script_text, target_duration)
+                layers.extend(caption_clips)
 
             final_clip = CompositeVideoClip(layers, size=(self.TARGET_WIDTH, self.TARGET_HEIGHT))
 
-            # 5. Export Video File
+            # 6. Encode Video
             logger.info("Encoding final video with H.264 & AAC...")
             final_clip.write_videofile(
                 str(output_path),
@@ -167,105 +206,159 @@ class VideoRenderer:
                 logger="bar"
             )
 
-            logger.info(f"Render completed successfully! File size: {output_path.stat().st_size} bytes")
+            logger.info(f"Video produced successfully! Size: {output_path.stat().st_size} bytes")
             return output_path
 
         finally:
-            # Guarantee resource cleanup on Windows
-            for clip in [final_clip, title_clip, video_clip, audio_clip]:
-                if clip:
+            # Guarantee memory and file descriptor release
+            all_clips = [final_clip, header_clip, video_clip, voice_clip, music_clip] + caption_clips
+            for c in all_clips:
+                if c:
                     try:
-                        clip.close()
+                        c.close()
                     except Exception:
                         pass
 
     def _fit_vertical(self, clip: VideoFileClip) -> VideoFileClip:
-        """
-        Crops and scales any aspect ratio into exact 1080x1920 vertical without distortion.
-        """
+        """Crops and centers footage into exact 1080x1920 vertical."""
         w, h = clip.size
-        target_aspect = self.TARGET_WIDTH / self.TARGET_HEIGHT  # 9/16 = 0.5625
+        target_aspect = self.TARGET_WIDTH / self.TARGET_HEIGHT
         clip_aspect = w / h
 
         if clip_aspect > target_aspect:
-            # Clip is wider than 9:16 -> scale height to 1920, then crop width to 1080 centered
             scaled = _clip_resize(clip, height=self.TARGET_HEIGHT)
             new_w, _ = scaled.size
             x1 = (new_w - self.TARGET_WIDTH) // 2
-            cropped = _clip_crop(scaled, x1=x1, y1=0, x2=x1 + self.TARGET_WIDTH, y2=self.TARGET_HEIGHT)
-            return cropped
+            return _clip_crop(scaled, x1=x1, y1=0, x2=x1 + self.TARGET_WIDTH, y2=self.TARGET_HEIGHT)
         else:
-            # Clip is narrower or taller -> scale width to 1080, then crop height to 1920 centered
             scaled = _clip_resize(clip, width=self.TARGET_WIDTH)
             _, new_h = scaled.size
             y1 = (new_h - self.TARGET_HEIGHT) // 2
-            cropped = _clip_crop(scaled, x1=0, y1=y1, x2=self.TARGET_WIDTH, y2=y1 + self.TARGET_HEIGHT)
-            return cropped
+            return _clip_crop(scaled, x1=0, y1=y1, x2=self.TARGET_WIDTH, y2=y1 + self.TARGET_HEIGHT)
 
-    def _create_title_overlay_image(self, title: str) -> Optional[Path]:
-        """
-        Generates a sleek, high-contrast title banner PNG using Pillow.
-        Avoids external ImageMagick dependencies.
-        """
+    def _create_header_pill(self, title: str) -> Optional[Path]:
+        """Creates modern aesthetic top-pill tag."""
         try:
-            overlay_file = config.temp_dir / "title_overlay.png"
-            img_width, img_height = 960, 240
+            overlay_file = config.temp_dir / "header_pill.png"
+            img_width, img_height = 800, 100
             img = Image.new("RGBA", (img_width, img_height), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
 
-            # Draw rounded rectangle backdrop with dark translucent background
+            # Translucent dark pill with gold accent outline
             draw.rounded_rectangle(
                 [(0, 0), (img_width, img_height)],
-                radius=25,
-                fill=(0, 0, 0, 180),
-                outline=(255, 215, 0, 220),  # Gold accent border
-                width=4
+                radius=50,
+                fill=(0, 0, 0, 200),
+                outline=(255, 215, 0, 240),
+                width=3
             )
 
-            # System fonts fallback
             font = None
-            try:
-                font = ImageFont.truetype("arialbd.ttf", 44)
-            except IOError:
+            for font_name in ["arialbd.ttf", "DejaVuSans-Bold.ttf"]:
                 try:
-                    font = ImageFont.truetype("DejaVuSans-Bold.ttf", 42)
+                    font = ImageFont.truetype(font_name, 36)
+                    break
                 except IOError:
-                    font = ImageFont.load_default()
+                    pass
+            if not font:
+                font = ImageFont.load_default()
 
-            # Word wrap title text
-            words = title.upper().split()
-            lines = []
-            curr_line = []
-            for w in words:
-                curr_line.append(w)
-                if len(" ".join(curr_line)) > 24:
-                    lines.append(" ".join(curr_line))
-                    curr_line = []
-            if curr_line:
-                lines.append(" ".join(curr_line))
+            short_title = title.upper()
+            if len(short_title) > 36:
+                short_title = short_title[:33] + "..."
 
-            # Limit to 3 lines
-            lines = lines[:3]
-            text = "\n".join(lines)
-
-            # Draw text centered
-            draw.multiline_text(
+            draw.text(
                 (img_width // 2, img_height // 2),
-                text,
+                short_title,
                 fill=(255, 255, 255, 255),
                 font=font,
-                anchor="mm",
-                align="center",
-                spacing=8
+                anchor="mm"
             )
 
             img.save(overlay_file, "PNG")
             return overlay_file
         except Exception as e:
-            logger.warning(f"Failed to generate title overlay graphic: {e}")
+            logger.warning(f"Header pill error: {e}")
             return None
+
+    def _generate_caption_clips(self, script: str, total_duration: float) -> List[ImageClip]:
+        """
+        Creates dynamic punchy animated subtitle cards timed to speech.
+        """
+        clips = []
+        words = script.strip().split()
+        if not words:
+            return clips
+
+        # Group words into short 3-to-4 word punchy phrases
+        chunk_size = 4
+        chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
+        total_words = len(words)
+
+        current_time = 0.0
+        font = None
+        for font_name in ["arialbd.ttf", "DejaVuSans-Bold.ttf"]:
+            try:
+                font = ImageFont.truetype(font_name, 56)
+                break
+            except IOError:
+                pass
+        if not font:
+            font = ImageFont.load_default()
+
+        caption_dir = config.temp_dir / "captions"
+        caption_dir.mkdir(parents=True, exist_ok=True)
+
+        for idx, chunk in enumerate(chunks):
+            chunk_word_count = len(chunk.split())
+            chunk_duration = total_duration * (chunk_word_count / total_words)
+
+            img_w, img_h = 1000, 260
+            img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+
+            # Alternate bold yellow / bright white for high engagement
+            highlight_color = (255, 235, 59, 255) if idx % 2 == 0 else (255, 255, 255, 255)
+            text_str = chunk.upper()
+
+            # Heavy black outline stroke for maximum readability over footage
+            stroke_width = 5
+            for dx in range(-stroke_width, stroke_width + 1):
+                for dy in range(-stroke_width, stroke_width + 1):
+                    draw.text(
+                        (img_w // 2 + dx, img_h // 2 + dy),
+                        text_str,
+                        font=font,
+                        fill=(0, 0, 0, 255),
+                        anchor="mm",
+                        align="center"
+                    )
+
+            # Draw highlighted main text
+            draw.text(
+                (img_w // 2, img_h // 2),
+                text_str,
+                font=font,
+                fill=highlight_color,
+                anchor="mm",
+                align="center"
+            )
+
+            caption_file = caption_dir / f"caption_{idx}.png"
+            img.save(caption_file, "PNG")
+
+            c_clip = ImageClip(str(caption_file))
+            c_clip = _clip_with_duration(c_clip, chunk_duration)
+            c_clip = _clip_with_start(c_clip, current_time)
+            # Positioned in the sweet spot (lower-center)
+            c_clip = _clip_with_position(c_clip, ("center", 1100))
+
+            clips.append(c_clip)
+            current_time += chunk_duration
+
+        return clips
 
 
 if __name__ == "__main__":
     renderer = VideoRenderer()
-    print("VideoRenderer initialized.")
+    print("VideoRenderer upgraded.")

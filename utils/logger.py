@@ -64,7 +64,7 @@ def send_alert(
     color = color_map.get(status.upper(), 0x95A5A6)
 
     # 1. Discord Webhook
-    if config.discord_webhook_url:
+    if config.discord_webhook_url and "xxxxxxxx" not in config.discord_webhook_url:
         discord_fields = []
         if fields:
             for k, v in fields.items():

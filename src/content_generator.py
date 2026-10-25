@@ -126,31 +126,47 @@ Return ONLY a valid JSON object matching this schema:
         return base_description.strip() + monetization_block
 
     def _generate_fallback(self, topic: str) -> Dict[str, Any]:
-        """Provides a safe, offline default payload when API is unavailable."""
-        title = "The Mystery of Black Holes That Stuns Physicists"
-        script = (
-            "Did you know that inside a black hole, space and time literally swap roles? "
-            "Once you cross the event horizon, moving forward in time becomes as inevitable "
-            "as moving toward the singularity. Even light, travelling at 300,000 kilometers "
-            "per second, cannot escape its gravitational grasp. What do you think happens "
-            "on the other side? Let us know below."
-        )
-        description = (
-            "Explore the strange reality inside a black hole where space and time reverse. "
-            "#ScienceFacts #Space #Physics #Shorts #Cosmos"
-        )
-        tags = [
-            "space facts", "black hole", "astrophysics", "science",
-            "cosmos", "physics mysteries", "universe", "nasa", "shorts", "education"
-        ]
-        search_keyword = "space galaxy"
+        """Provides high-retention Tier-1 viral scripts targeting US/UK/Canada audiences."""
+        import random
 
+        high_cpm_pool = [
+            {
+                "title": "The 1% Rule of Compounding That Banks Hide From You",
+                "script": "What if I told you that 90% of millionaires didn't get rich by saving money? They mastered the rule of geometric leverage. If you invest just 10 dollars a day at a 10 percent annual return, compound interest turns that into over one million dollars. The rich make money work for them 24 hours a day while they sleep. Which asset do you think beats inflation best? Comment below.",
+                "description": "Discover how the wealthiest 1% leverage compounding interest and smart money habits to build generational wealth. #Wealth #Money #MillionaireMindset #Investing #Finance #Shorts",
+                "tags": ["wealth mindset", "how to get rich", "compound interest", "passive income", "finance hacks", "investing", "money tips", "millionaire habits", "shorts", "financial freedom"],
+                "search_keyword": "money"
+            },
+            {
+                "title": "3 Dark Psychology Tricks That Make Anyone Respect You",
+                "script": "Here is a psychological hack that command respect in any room within 3 seconds. First, never break eye contact first when someone finishes speaking. Second, master the power of the 2-second pause before answering any question. It signals supreme confidence. Third, never explain yourself when you say no. Which of these psychological laws have you noticed people using on you?",
+                "description": "Master behavioral psychology and instant social dominance with these subtle human interaction secrets. #Psychology #Mindset #BodyLanguage #Confidence #DarkPsychology #Shorts",
+                "tags": ["psychology tricks", "dark psychology", "body language", "human behavior", "confidence hacks", "mind tricks", "social skills", "self improvement", "shorts", "facts"],
+                "search_keyword": "luxury"
+            },
+            {
+                "title": "The AI Revolution That Is Terrifying Silicon Valley",
+                "script": "Silicon Valley researchers are sounding the alarm over a breakthrough in autonomous artificial intelligence. AI models are now writing and debugging their own neural architecture with zero human engineers involved. Within the next 3 years, more computing power will be generated than in the entire history of humanity combined. Will AI surpass human intelligence sooner than expected? Tell us below.",
+                "description": "The rapid exponential evolution of artificial intelligence and autonomous machine learning is transforming reality. #AI #Technology #FutureTech #SiliconValley #Robotics #Shorts",
+                "tags": ["artificial intelligence", "future tech", "ai news", "robotics", "singularity", "tech trends", "quantum computing", "silicon valley", "shorts", "innovation"],
+                "search_keyword": "technology"
+            },
+            {
+                "title": "The Mystery of Time Dilation That Stuns Physicists",
+                "script": "Did you know that time ticks slower on your feet than on your head? According to Einstein's general relativity, the closer you are to a massive gravitational center like Earth, the slower time passes. Astronauts orbiting on the Space Station age slower than everyone on Earth. If you spent just 1 hour near a supermassive black hole, 7 years would pass back home. Mind-blowing, right?",
+                "description": "Explore the strange laws of general relativity and gravitational time dilation across the cosmos. #Physics #ScienceFacts #Cosmos #Space #Universe #Shorts",
+                "tags": ["time dilation", "einstein", "physics facts", "space mysteries", "black hole", "cosmos", "quantum physics", "science", "shorts", "astrophysics"],
+                "search_keyword": "space"
+            }
+        ]
+
+        selected = random.choice(high_cpm_pool)
         return {
-            "title": title,
-            "script": script,
-            "description": self._append_monetization(description),
-            "tags": tags,
-            "search_keyword": search_keyword
+            "title": selected["title"],
+            "script": selected["script"],
+            "description": self._append_monetization(selected["description"]),
+            "tags": selected["tags"],
+            "search_keyword": selected["search_keyword"]
         }
 
 

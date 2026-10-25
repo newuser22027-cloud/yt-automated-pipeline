@@ -51,6 +51,20 @@ def main():
     print("    If a warning 'Google hasn't verified this app' appears, click 'Advanced' -> 'Go to app (unsafe)' to proceed.")
 
     flow = InstalledAppFlow.from_client_secrets_file(str(secret_file), SCOPES)
+    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
+    
+    print("\n" + "=" * 70, flush=True)
+    print(" PLEASE OPEN THIS URL IN YOUR BROWSER TO AUTHORIZE:", flush=True)
+    print(auth_url, flush=True)
+    print("=" * 70 + "\n", flush=True)
+
+    # Attempt to open directly in system browser
+    try:
+        import webbrowser
+        webbrowser.open(auth_url)
+    except Exception:
+        pass
+
     credentials = flow.run_local_server(
         port=8080,
         prompt="consent",
@@ -75,35 +89,35 @@ def main():
     print(minified_json)
     print("\n" + "=" * 70)
 
-    # Optional automatic .env updater
+    # Automatically write to local .env
     env_file = base_dir / ".env"
     if env_file.exists():
-        update = input("\nWould you like to automatically write these to your local .env file? [y/N]: ").strip().lower()
-        if update == "y":
-            with open(env_file, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-            
-            new_lines = []
-            has_token = False
-            has_secret = False
-            for line in lines:
-                if line.startswith("YOUTUBE_REFRESH_TOKEN="):
-                    new_lines.append(f"YOUTUBE_REFRESH_TOKEN={credentials.refresh_token}\n")
-                    has_token = True
-                elif line.startswith("YOUTUBE_CLIENT_SECRET_JSON="):
-                    new_lines.append(f"YOUTUBE_CLIENT_SECRET_JSON='{minified_json}'\n")
-                    has_secret = True
-                else:
-                    new_lines.append(line)
-            
-            if not has_token:
-                new_lines.append(f"\nYOUTUBE_REFRESH_TOKEN={credentials.refresh_token}\n")
-            if not has_secret:
+        with open(env_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        
+        new_lines = []
+        has_token = False
+        has_secret = False
+        for line in lines:
+            if line.startswith("YOUTUBE_REFRESH_TOKEN="):
+                new_lines.append(f"YOUTUBE_REFRESH_TOKEN={credentials.refresh_token}\n")
+                has_token = True
+            elif line.startswith("YOUTUBE_CLIENT_SECRET_JSON="):
                 new_lines.append(f"YOUTUBE_CLIENT_SECRET_JSON='{minified_json}'\n")
-                
-            with open(env_file, "w", encoding="utf-8") as f:
-                f.writelines(new_lines)
-            print("[+] Updated local .env successfully!")
+                has_secret = True
+            else:
+                new_lines.append(line)
+        
+        if not has_token:
+            new_lines.append(f"\nYOUTUBE_REFRESH_TOKEN={credentials.refresh_token}\n")
+        if not has_secret:
+            new_lines.append(f"YOUTUBE_CLIENT_SECRET_JSON='{minified_json}'\n")
+            
+        with open(env_file, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+        print("\n[+] Automatically updated your local .env file with refresh token & credentials!")
+    else:
+        print("\n[!] .env not found. Please paste the credentials into .env manually.")
 
 
 if __name__ == "__main__":

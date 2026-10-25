@@ -1,176 +1,328 @@
 """
-Content Generator Module.
-Leverages Google Gemini API (Free Tier) or OpenAI GPT-4o-mini to produce
-high-CTR titles, scripts, tags, SEO descriptions, and visual stock search queries.
+Content Generator Module — UPGRADED v3.0
+- Drama/Movies/Stories niche support for "Yummy Dramaz" channel
+- YouTube Analytics check before each new video (avoid repeat topics)
+- Strong hook-first script structure (retain viewers in first 3 sec)
+- Fully SEO-optimized title, description, tags, hashtags
+- High-CPM Tier-1 audience targeting (US/UK/CA/AU)
 """
 
 import os
 import json
 import re
+import random
 from typing import Dict, Any, List, Optional
 import requests
-from openai import OpenAI
 
 from src.config import config
 from utils.logger import logger
 
 
+# ── NICHE CONFIGURATION ──────────────────────────────────────────────────────
+# Channel: "Yummy Dramaz" — Drama/Movies/Stories/Psychology
+# Targeting: US, UK, Canada, Australia (High-CPM Tier-1)
+CHANNEL_NICHE = "drama-stories"   # options: "drama-stories" | "finance" | "psychology" | "tech"
+
+DRAMA_TOPICS = [
+    "a shocking betrayal that changed a family forever",
+    "a love story that ended in tragedy no one saw coming",
+    "the darkest secret hidden inside a rich family",
+    "a woman who discovered her husband's double life",
+    "the forbidden romance that destroyed two families",
+    "a psychological thriller story about obsession and revenge",
+    "a true crime story that shocked the entire city",
+    "the twisted mind games inside a toxic relationship",
+    "a mother who found out her child was not hers",
+    "the millionaire who lost everything because of one mistake",
+    "a story of betrayal between best friends",
+    "the secret affair that no one was supposed to know about",
+    "a girl who uncovered a dark conspiracy in her own home",
+    "the husband who disappeared on their wedding night",
+    "a revenge story that took 10 years to complete",
+    "dark psychology tricks used to manipulate your partner",
+    "the wife who planned the perfect revenge",
+    "a story about greed, power, and ultimate downfall",
+]
+
+
 class ContentGenerator:
-    """Handles prompt engineering, completions, and metadata synthesis."""
+    """Handles script generation with analytics feedback and SEO optimization."""
 
     def __init__(self, openai_key: Optional[str] = None, gemini_key: Optional[str] = None):
         self.openai_key = openai_key or config.openai_api_key
         self.gemini_key = gemini_key or config.gemini_api_key
-        
-        self.openai_client = None
-        if self.openai_key and "sk-proj-xxxx" not in self.openai_key:
-            try:
-                self.openai_client = OpenAI(api_key=self.openai_key)
-            except Exception:
-                pass
+        self._used_topics_cache: List[str] = []
+
+    # ── PUBLIC METHODS ────────────────────────────────────────────────────────
 
     def generate(self, niche: str = None) -> Dict[str, Any]:
         """
-        Generates complete video package in JSON format.
-        Tries Gemini API first (100% free), then OpenAI, then offline fallback.
+        Generates complete video package.
+        1. Checks analytics to pick a fresh topic
+        2. Tries Gemini API (free)
+        3. Falls back to curated pool
         """
-        topic = niche or config.video_niche
-        logger.info(f"Generating content for niche: '{topic}'")
+        topic = self._pick_smart_topic(niche)
+        logger.info(f"Generating content for topic: '{topic}'")
 
-        prompt = f"""
-You are a viral YouTube Shorts creator and algorithmic strategist.
-Generate an irresistible, factual, 30-to-45-second vertical video script about: "{topic}".
+        prompt = self._build_drama_prompt(topic)
 
-Rules:
-1. "title": Must have high Click-Through-Rate (CTR), punchy, curiosity-inducing, under 90 characters.
-2. "script": Spoken narrative, around 70-90 words. Start with an immediate curiosity hook in the first 3 seconds (no intro/filler like 'Hey guys'). Deliver high-value factual content and end with an engaging retention thought.
-3. "description": 2-3 engaging sentences explaining the topic, followed by 5 relevant viral hashtags.
-4. "tags": An array of exactly 10 high-search-volume tags.
-5. "search_keyword": A single, high-relevance, simple visual search term (1-2 words) suitable for finding free stock background footage (e.g. 'space galaxy', 'deep ocean', 'robotics').
-
-Return ONLY a valid JSON object matching this schema:
-{{
-  "title": "string",
-  "script": "string",
-  "description": "string",
-  "tags": ["tag1", "tag2", ...],
-  "search_keyword": "string"
-}}
-"""
-
-        # 1. Try Gemini API (Free tier)
-        if self.gemini_key and "AIzaSy" in self.gemini_key:
+        # Try Gemini free tier first
+        if self.gemini_key and len(self.gemini_key) > 20:
             try:
-                logger.info("Attempting generation via Google Gemini API (Free Tier)...")
+                logger.info("Attempting via Google Gemini API (Free)...")
                 data = self._generate_gemini(prompt)
-                if data:
-                    data["description"] = self._append_monetization(data["description"])
-                    logger.info(f"Gemini generated: '{data['title']}'")
+                if data and self._validate_content(data):
+                    data = self._enrich_metadata(data, topic)
+                    logger.info(f"✅ Gemini generated: '{data['title']}'")
                     return data
             except Exception as e:
-                logger.warning(f"Gemini API generation error: {e}")
+                logger.warning(f"Gemini error: {e}")
 
-        # 2. Try OpenAI API
-        if self.openai_client:
+        # Try OpenAI
+        if self.openai_key and "sk-proj-xxxx" not in self.openai_key:
             try:
-                logger.info("Attempting generation via OpenAI GPT-4o-mini...")
-                response = self.openai_client.chat.completions.create(
+                from openai import OpenAI
+                client = OpenAI(api_key=self.openai_key)
+                logger.info("Attempting via OpenAI GPT-4o-mini...")
+                response = client.chat.completions.create(
                     model="gpt-4o-mini",
                     response_format={"type": "json_object"},
                     messages=[
-                        {
-                            "role": "system",
-                            "content": "You are an automated YouTube Shorts production engine that outputs strictly JSON."
-                        },
+                        {"role": "system", "content": "You are a viral YouTube Shorts script writer. Output only valid JSON."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.75,
-                    max_tokens=600
+                    temperature=0.82,
+                    max_tokens=700
                 )
-                raw_content = response.choices[0].message.content
-                data = json.loads(raw_content)
-                data["description"] = self._append_monetization(data["description"])
-                logger.info(f"OpenAI generated: '{data['title']}'")
-                return data
+                data = json.loads(response.choices[0].message.content)
+                if self._validate_content(data):
+                    data = self._enrich_metadata(data, topic)
+                    logger.info(f"✅ OpenAI generated: '{data['title']}'")
+                    return data
             except Exception as e:
-                logger.error(f"OpenAI generation error: {e}")
+                logger.warning(f"OpenAI error: {e}")
 
-        # 3. Fallback
-        logger.warning("Falling back to curated procedural/offline content package.")
+        # Curated fallback
+        logger.warning("Using curated drama content pool.")
         return self._generate_fallback(topic)
 
+    def get_analytics_summary(self) -> Dict[str, Any]:
+        """
+        Fetches last 5 uploaded video titles from YouTube to avoid repeating topics.
+        Returns dict with list of recent titles.
+        """
+        try:
+            from google.oauth2.credentials import Credentials
+            from google.auth.transport.requests import Request
+            from googleapiclient.discovery import build
+
+            client_dict = config.get_client_secret_dict()
+            creds_info = client_dict.get("installed") or client_dict.get("web", {})
+
+            creds = Credentials(
+                token=None,
+                refresh_token=config.youtube_refresh_token,
+                token_uri=creds_info.get("token_uri", "https://oauth2.googleapis.com/token"),
+                client_id=creds_info.get("client_id"),
+                client_secret=creds_info.get("client_secret"),
+                scopes=["https://www.googleapis.com/auth/youtube.readonly"]
+            )
+            creds.refresh(Request())
+            youtube = build("youtube", "v3", credentials=creds)
+
+            # Get channel's own videos
+            search_resp = youtube.search().list(
+                part="snippet",
+                forMine=True,
+                type="video",
+                maxResults=10,
+                order="date"
+            ).execute()
+
+            recent_titles = [
+                item["snippet"]["title"]
+                for item in search_resp.get("items", [])
+            ]
+            self._used_topics_cache = recent_titles
+            logger.info(f"📊 Analytics: found {len(recent_titles)} recent videos.")
+            return {"recent_titles": recent_titles}
+
+        except Exception as e:
+            logger.warning(f"Could not fetch analytics (non-critical): {e}")
+            return {"recent_titles": []}
+
+    # ── PRIVATE METHODS ───────────────────────────────────────────────────────
+
+    def _pick_smart_topic(self, niche_override: str = None) -> str:
+        """Picks a topic not recently used, based on analytics."""
+        if niche_override:
+            return niche_override
+
+        # Fetch recent titles to avoid repetition
+        analytics = self.get_analytics_summary()
+        recent_titles = [t.lower() for t in analytics.get("recent_titles", [])]
+
+        # Filter out topics that are similar to recent ones
+        available = []
+        for topic in DRAMA_TOPICS:
+            topic_words = set(topic.lower().split())
+            is_too_similar = any(
+                len(topic_words & set(rt.split())) >= 2
+                for rt in recent_titles
+            )
+            if not is_too_similar:
+                available.append(topic)
+
+        if not available:
+            available = DRAMA_TOPICS  # reset if all used
+
+        return random.choice(available)
+
+    def _build_drama_prompt(self, topic: str) -> str:
+        """Builds a drama-focused viral Shorts prompt with strong hook."""
+        return f"""
+You are a VIRAL YouTube Shorts creator for the channel "Yummy Dramaz".
+Your audience is in the US, UK, Canada, and Australia (High-CPM viewers).
+Content niche: dramatic stories, dark psychology, betrayal, revenge, love gone wrong, shocking twists.
+
+Create a 35-45 second YouTube Short script about: "{topic}"
+
+STRICT RULES:
+1. "hook": First 2-3 sentences ONLY. Must be SHOCKING and make viewer UNABLE to scroll away. 
+   Start with phrases like: "Nobody knew that...", "She had no idea...", "What he discovered changed everything...", "For 5 years, she hid the truth..."
+2. "script": Full 75-95 word spoken narrative. Hook first, then story build-up, end with cliffhanger or question. NO filler intro. Immediate tension.
+3. "title": Ultra-clickbait, emotional, under 90 chars. Examples: "She Faked Her Own Death To Escape Him 💔", "He Didn't Know His Wife Had A Secret Family 😱"
+4. "description": 2-3 emotional sentences about the story + call to action + 5-7 hashtags. Include: #YummyDramaz #Shorts #Drama
+5. "tags": Exactly 12 high-search tags targeting US/UK drama audience. Include: shorts, drama, betrayal, story, shocking, etc.
+6. "search_keyword": 1-2 word visual search term for background footage (e.g. "couple arguing", "luxury house", "sad woman", "dark room", "city night").
+7. "thumbnail_text": 3-5 word bold emotional text to overlay on thumbnail (e.g. "SHE FAKED HER DEATH 😱").
+8. "category": One of: Drama, Psychology, True Crime, Love Story, Revenge.
+9. "hashtags": Array of 5 trending hashtags starting with #.
+
+Return ONLY valid JSON:
+{{
+  "title": "string",
+  "hook": "string",
+  "script": "string",
+  "description": "string",
+  "tags": ["tag1",...],
+  "hashtags": ["#tag1",...],
+  "search_keyword": "string",
+  "thumbnail_text": "string",
+  "category": "string"
+}}
+"""
+
     def _generate_gemini(self, prompt: str) -> Optional[Dict[str, Any]]:
-        """Invokes Gemini 1.5/2.0 Flash via standard REST API."""
+        """Calls Gemini 1.5 Flash via REST."""
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.gemini_key}"
-        headers = {"Content-Type": "application/json"}
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"response_mime_type": "application/json"}
         }
-        res = requests.post(url, headers=headers, json=payload, timeout=20)
+        res = requests.post(url, json=payload, timeout=25)
         if res.status_code == 200:
-            result = res.json()
-            raw_text = result["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(raw_text)
-        else:
-            raise RuntimeError(f"Gemini API responded with HTTP {res.status_code}: {res.text}")
+            raw = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+            return json.loads(raw)
+        raise RuntimeError(f"Gemini HTTP {res.status_code}: {res.text[:200]}")
 
-    def _append_monetization(self, base_description: str) -> str:
-        """Appends contextual monetization and affiliate links to the description."""
-        monetization_block = (
-            f"\n\n--- RECOMMENDED RESOURCES ---\n"
-            f"⚡ Automated Production Toolkit: https://amazon.com/?tag={config.amazon_affiliate_tag}\n"
-            f"📈 Grow & Rank Your Channel Faster: https://vidiq.com/{config.vidiq_affiliate_id}\n\n"
-            f"🔔 Subscribe for daily science & tech discoveries!"
+    def _validate_content(self, data: Dict) -> bool:
+        """Ensures required fields present."""
+        return all(k in data for k in ["title", "script", "description", "tags"])
+
+    def _enrich_metadata(self, data: Dict, topic: str) -> Dict:
+        """Adds missing fields and appends channel branding."""
+        # Ensure hook is prepended to script for TTS if hook exists separately
+        if "hook" in data and data["hook"] and data["hook"] not in data["script"]:
+            data["script"] = data["hook"] + " " + data["script"]
+
+        # Add hashtags to description if not present
+        if "hashtags" not in data:
+            data["hashtags"] = ["#YummyDramaz", "#Shorts", "#Drama", "#Story", "#Viral"]
+
+        hashtag_str = " ".join(data["hashtags"])
+        if hashtag_str not in data["description"]:
+            data["description"] = data["description"].strip() + f"\n\n{hashtag_str}"
+
+        # Channel branding footer
+        data["description"] += (
+            "\n\n🔔 Subscribe to Yummy Dramaz for daily shocking stories!"
+            "\n💬 Comment your reaction below!"
+            "\n❤️ Like if this story shocked you!"
         )
-        return base_description.strip() + monetization_block
+
+        # SEO fields
+        data.setdefault("category_id", "24")  # 24 = Entertainment
+        data.setdefault("thumbnail_text", data["title"][:30].upper())
+        data.setdefault("search_keyword", "drama")
+
+        # Ensure #Shorts tag for YouTube algorithm
+        if "shorts" not in [t.lower() for t in data.get("tags", [])]:
+            data.setdefault("tags", []).append("shorts")
+        if "#Shorts" not in data.get("hashtags", []):
+            data.setdefault("hashtags", []).append("#Shorts")
+
+        return data
 
     def _generate_fallback(self, topic: str) -> Dict[str, Any]:
-        """Provides high-retention Tier-1 viral scripts targeting US/UK/Canada audiences."""
-        import random
-
-        high_cpm_pool = [
+        """High-retention drama fallback pool for Yummy Dramaz."""
+        pool = [
             {
-                "title": "The 1% Rule of Compounding That Banks Hide From You",
-                "script": "What if I told you that 90% of millionaires didn't get rich by saving money? They mastered the rule of geometric leverage. If you invest just 10 dollars a day at a 10 percent annual return, compound interest turns that into over one million dollars. The rich make money work for them 24 hours a day while they sleep. Which asset do you think beats inflation best? Comment below.",
-                "description": "Discover how the wealthiest 1% leverage compounding interest and smart money habits to build generational wealth. #Wealth #Money #MillionaireMindset #Investing #Finance #Shorts",
-                "tags": ["wealth mindset", "how to get rich", "compound interest", "passive income", "finance hacks", "investing", "money tips", "millionaire habits", "shorts", "financial freedom"],
-                "search_keyword": "money"
+                "title": "She Found Texts That Destroyed Her Marriage 💔 #Shorts",
+                "hook": "Nobody warned her. She grabbed his phone for a second — and found 5 years of lies.",
+                "script": "Nobody warned her. She grabbed his phone for a second — and found 5 years of lies. Over 200 messages. Another woman. Another family. Her hands shook as she scrolled through the photos — her husband at a birthday party she never knew existed. Three kids smiled back at her from the screen. She had been the wife. But she was never his only one. What would YOU do in her place?",
+                "description": "A shocking story of betrayal that no wife should ever experience. Sometimes the person you trust most hides the darkest secrets. #YummyDramaz #Shorts #Drama #Betrayal #Story",
+                "tags": ["drama shorts", "betrayal story", "shocking story", "marriage betrayal", "true story", "drama", "shorts", "yummy dramaz", "cheating husband", "viral story", "emotional story", "relationship"],
+                "hashtags": ["#YummyDramaz", "#Shorts", "#Drama", "#Betrayal", "#ShockingStory"],
+                "search_keyword": "sad woman",
+                "thumbnail_text": "5 YEARS OF LIES 😱",
+                "category": "Drama",
+                "category_id": "24"
             },
             {
-                "title": "3 Dark Psychology Tricks That Make Anyone Respect You",
-                "script": "Here is a psychological hack that command respect in any room within 3 seconds. First, never break eye contact first when someone finishes speaking. Second, master the power of the 2-second pause before answering any question. It signals supreme confidence. Third, never explain yourself when you say no. Which of these psychological laws have you noticed people using on you?",
-                "description": "Master behavioral psychology and instant social dominance with these subtle human interaction secrets. #Psychology #Mindset #BodyLanguage #Confidence #DarkPsychology #Shorts",
-                "tags": ["psychology tricks", "dark psychology", "body language", "human behavior", "confidence hacks", "mind tricks", "social skills", "self improvement", "shorts", "facts"],
-                "search_keyword": "luxury"
+                "title": "He Discovered His Wife Had A Secret Family 😱 #Shorts",
+                "hook": "For 7 years, he thought he was her only husband. He was wrong.",
+                "script": "For 7 years, he thought he was her only husband. He was wrong. It started with a stranger calling his home asking for \"Mrs. Karen.\" Then a lawyer's letter arrived — his wife had filed for divorce in another state. She had a second husband. Two daughters. A whole life he knew nothing about. When he confronted her, she simply said — you were never supposed to find out. What would you do?",
+                "description": "When trust is shattered beyond repair — a shocking story of a double life no one saw coming. #YummyDramaz #Shorts #Drama #ShockingStory #TrueCrime",
+                "tags": ["shocking story", "drama shorts", "double life", "betrayal", "story time", "drama", "shorts", "yummy dramaz", "viral", "emotional", "true crime", "relationship drama"],
+                "hashtags": ["#YummyDramaz", "#Shorts", "#Drama", "#DoubleLife", "#Shocking"],
+                "search_keyword": "couple arguing",
+                "thumbnail_text": "DOUBLE LIFE EXPOSED 😳",
+                "category": "Drama",
+                "category_id": "24"
             },
             {
-                "title": "The AI Revolution That Is Terrifying Silicon Valley",
-                "script": "Silicon Valley researchers are sounding the alarm over a breakthrough in autonomous artificial intelligence. AI models are now writing and debugging their own neural architecture with zero human engineers involved. Within the next 3 years, more computing power will be generated than in the entire history of humanity combined. Will AI surpass human intelligence sooner than expected? Tell us below.",
-                "description": "The rapid exponential evolution of artificial intelligence and autonomous machine learning is transforming reality. #AI #Technology #FutureTech #SiliconValley #Robotics #Shorts",
-                "tags": ["artificial intelligence", "future tech", "ai news", "robotics", "singularity", "tech trends", "quantum computing", "silicon valley", "shorts", "innovation"],
-                "search_keyword": "technology"
+                "title": "Dark Psychology: How Toxic People Control You 🧠 #Shorts",
+                "hook": "If someone does THIS to you — run. They are using your emotions as a weapon.",
+                "script": "If someone does THIS to you — run immediately. They are using your emotions as a weapon. Toxic people use a technique called \"intermittent reinforcement\" — they hurt you, then love bomb you. Hot and cold. Push and pull. Your brain becomes addicted to their approval like a drug. They control your self-worth until you cannot imagine life without their validation. This is not love. This is manipulation. Have you experienced this?",
+                "description": "Dark psychology tactics that toxic and narcissistic people use to control and manipulate those around them. Awareness is your protection. #YummyDramaz #Shorts #Psychology #Manipulation #DarkPsychology",
+                "tags": ["dark psychology", "toxic relationship", "narcissist", "manipulation tactics", "psychology shorts", "drama", "shorts", "yummy dramaz", "mental health", "toxic people", "red flags", "self improvement"],
+                "hashtags": ["#YummyDramaz", "#Shorts", "#DarkPsychology", "#Manipulation", "#ToxicRelationship"],
+                "search_keyword": "dark room",
+                "thumbnail_text": "THEY CONTROL YOU 🧠",
+                "category": "Psychology",
+                "category_id": "24"
             },
             {
-                "title": "The Mystery of Time Dilation That Stuns Physicists",
-                "script": "Did you know that time ticks slower on your feet than on your head? According to Einstein's general relativity, the closer you are to a massive gravitational center like Earth, the slower time passes. Astronauts orbiting on the Space Station age slower than everyone on Earth. If you spent just 1 hour near a supermassive black hole, 7 years would pass back home. Mind-blowing, right?",
-                "description": "Explore the strange laws of general relativity and gravitational time dilation across the cosmos. #Physics #ScienceFacts #Cosmos #Space #Universe #Shorts",
-                "tags": ["time dilation", "einstein", "physics facts", "space mysteries", "black hole", "cosmos", "quantum physics", "science", "shorts", "astrophysics"],
-                "search_keyword": "space"
-            }
+                "title": "She Waited 10 Years To Destroy Him 😤 Revenge Story #Shorts",
+                "hook": "She smiled at her ex at the party. He had no idea she had been planning this for a decade.",
+                "script": "She smiled at her ex at the party. He had no idea she had been planning this for a decade. Ten years ago he humiliated her publicly, took her savings, and left her with nothing. She rebuilt herself — quietly, methodically. She bought the company he worked for. And on a Monday morning, she sat in the CEO chair and called him into her office. He went pale. She simply said — you're fired. Revenge is a dish best served cold.",
+                "description": "A story of patience, rebuilding, and ultimate revenge that proves karma always comes back around. #YummyDramaz #Shorts #Revenge #Drama #Story",
+                "tags": ["revenge story", "drama shorts", "karma story", "shocking ending", "story time", "drama", "shorts", "yummy dramaz", "viral story", "emotional", "revenge", "satisfying"],
+                "hashtags": ["#YummyDramaz", "#Shorts", "#Revenge", "#Drama", "#KarmaStory"],
+                "search_keyword": "luxury office",
+                "thumbnail_text": "10 YEAR REVENGE 😤",
+                "category": "Revenge",
+                "category_id": "24"
+            },
         ]
 
-        selected = random.choice(high_cpm_pool)
-        return {
-            "title": selected["title"],
-            "script": selected["script"],
-            "description": self._append_monetization(selected["description"]),
-            "tags": selected["tags"],
-            "search_keyword": selected["search_keyword"]
-        }
+        selected = random.choice(pool)
+        return self._enrich_metadata(selected.copy(), topic)
 
 
 if __name__ == "__main__":
-    generator = ContentGenerator()
-    content = generator.generate()
+    gen = ContentGenerator()
+    content = gen.generate()
     print(json.dumps(content, indent=2))

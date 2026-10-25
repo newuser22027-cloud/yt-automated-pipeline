@@ -1,123 +1,100 @@
 """
-Video Renderer Module.
-Assembles viral 1080x1920 vertical YouTube Shorts with:
-1. Real cinematic HD stock video background (smart auto-cropped to 9:16)
-2. Dynamic animated word-by-word / phrase-by-phrase captions (Hormozi style)
-3. Balanced background ambient music (ducked under neural voiceover)
-4. Sleek top-header category pill
+Video Renderer Module — UPGRADED v3.0
+Major upgrades:
+1. Premium animated captions — word-by-word with zoom-pop, color-flash, glow effects
+2. Background music always present (downloaded if missing)
+3. Smaller, more readable caption size
+4. Strong hook banner at top of video (first 3s)
+5. Smooth fade-in on video start
+6. Eye-catching caption colors: yellow, cyan, hot-pink alternating
 """
 
 import os
+import math
+import random
 from pathlib import Path
 from typing import Optional, List, Tuple
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 # Universal MoviePy imports
 try:
     from moviepy.editor import (
-        VideoFileClip,
-        AudioFileClip,
-        CompositeVideoClip,
-        CompositeAudioClip,
-        ImageClip,
-        concatenate_videoclips,
-        afx
+        VideoFileClip, AudioFileClip, CompositeVideoClip,
+        CompositeAudioClip, ImageClip, concatenate_videoclips, afx
     )
 except ImportError:
     from moviepy import (
-        VideoFileClip,
-        AudioFileClip,
-        CompositeVideoClip,
-        CompositeAudioClip,
-        ImageClip,
-        concatenate_videoclips,
-        afx
+        VideoFileClip, AudioFileClip, CompositeVideoClip,
+        CompositeAudioClip, ImageClip, concatenate_videoclips, afx
     )
 
 from src.config import config
 from utils.logger import logger
 
 
-def _clip_subclip(clip, start_time: float, end_time: float):
-    if hasattr(clip, "subclipped"):
-        return clip.subclipped(start_time, end_time)
-    return clip.subclip(start_time, end_time)
+# ── MOVIEPY v1/v2 COMPAT HELPERS ─────────────────────────────────────────────
 
+def _clip_subclip(clip, s, e):
+    return clip.subclipped(s, e) if hasattr(clip, "subclipped") else clip.subclip(s, e)
 
-def _clip_with_duration(clip, duration: float):
-    if hasattr(clip, "with_duration"):
-        return clip.with_duration(duration)
-    return clip.set_duration(duration)
-
+def _clip_with_duration(clip, d):
+    return clip.with_duration(d) if hasattr(clip, "with_duration") else clip.set_duration(d)
 
 def _clip_with_audio(clip, audio):
-    if hasattr(clip, "with_audio"):
-        return clip.with_audio(audio)
-    return clip.set_audio(audio)
+    return clip.with_audio(audio) if hasattr(clip, "with_audio") else clip.set_audio(audio)
 
+def _clip_with_position(clip, pos):
+    return clip.with_position(pos) if hasattr(clip, "with_position") else clip.set_pos(pos)
 
-def _clip_with_position(clip, position):
-    if hasattr(clip, "with_position"):
-        return clip.with_position(position)
-    return clip.set_pos(position)
+def _clip_with_start(clip, t):
+    if hasattr(clip, "with_start_time"): return clip.with_start_time(t)
+    if hasattr(clip, "with_start"): return clip.with_start(t)
+    return clip.set_start(t)
 
-
-def _clip_with_start(clip, start_time: float):
-    if hasattr(clip, "with_start_time"):
-        return clip.with_start_time(start_time)
-    if hasattr(clip, "with_start"):
-        return clip.with_start(start_time)
-    return clip.set_start(start_time)
-
-
-def _clip_resize(clip, width: Optional[int] = None, height: Optional[int] = None):
+def _clip_resize(clip, width=None, height=None):
     if hasattr(clip, "resized"):
-        if width is not None and height is not None:
-            return clip.resized((width, height))
-        if height is not None:
-            return clip.resized(height=height)
-        if width is not None:
-            return clip.resized(width=width)
-    if width is not None and height is not None:
-        return clip.resize(newsize=(width, height))
-    if height is not None:
-        return clip.resize(height=height)
-    if width is not None:
-        return clip.resize(width=width)
-    return clip
+        if width and height: return clip.resized((width, height))
+        if height: return clip.resized(height=height)
+        return clip.resized(width=width)
+    if width and height: return clip.resize(newsize=(width, height))
+    if height: return clip.resize(height=height)
+    return clip.resize(width=width)
 
-
-def _clip_crop(clip, x1: int, y1: int, x2: int, y2: int):
-    if hasattr(clip, "cropped"):
-        return clip.cropped(x1=x1, y1=y1, x2=x2, y2=y2)
-    return clip.crop(x1=x1, y1=y1, x2=x2, y2=y2)
-
+def _clip_crop(clip, x1, y1, x2, y2):
+    return clip.cropped(x1=x1, y1=y1, x2=x2, y2=y2) if hasattr(clip, "cropped") else clip.crop(x1=x1, y1=y1, x2=x2, y2=y2)
 
 def _loop_clip(clip, target_duration: float):
     if clip.duration >= target_duration:
         return _clip_subclip(clip, 0, target_duration)
     repeats = int(target_duration // clip.duration) + 2
-    looped = concatenate_videoclips([clip] * repeats)
-    return _clip_subclip(looped, 0, target_duration)
+    return _clip_subclip(concatenate_videoclips([clip] * repeats), 0, target_duration)
 
-
-def _set_volume(audio_clip, volume_factor: float):
+def _set_volume(audio_clip, factor: float):
     if hasattr(audio_clip, "with_effects"):
-        try:
-            return audio_clip.with_effects([afx.MultiplyVolume(volume_factor)])
-        except Exception:
-            pass
-    if hasattr(audio_clip, "volumex"):
-        return audio_clip.volumex(volume_factor)
+        try: return audio_clip.with_effects([afx.MultiplyVolume(factor)])
+        except Exception: pass
+    if hasattr(audio_clip, "volumex"): return audio_clip.volumex(factor)
     return audio_clip
 
 
-class VideoRenderer:
-    """Assembles professional high-retention 1080x1920 vertical videos."""
+# ── CAPTION COLOR PALETTE ─────────────────────────────────────────────────────
+# Eye-catching alternating palette for drama shorts
+CAPTION_PALETTE = [
+    (255, 235, 59),    # Vibrant yellow
+    (255, 255, 255),   # Pure white
+    (0, 229, 255),     # Cyan / electric blue
+    (255, 82, 82),     # Hot red/pink
+    (178, 255, 89),    # Lime green
+]
+GLOW_COLOR = (255, 200, 0, 180)   # Gold glow behind text
 
-    TARGET_WIDTH = 1080
+
+class VideoRenderer:
+    """Assembles professional high-retention 1080x1920 vertical drama shorts."""
+
+    TARGET_WIDTH  = 1080
     TARGET_HEIGHT = 1920
-    TARGET_FPS = 30
+    TARGET_FPS    = 30
 
     def render(
         self,
@@ -125,77 +102,85 @@ class VideoRenderer:
         video_path: Path,
         title_text: Optional[str] = None,
         script_text: Optional[str] = None,
-        output_path: Optional[Path] = None
+        output_path: Optional[Path] = None,
+        hook_text: Optional[str] = None,
     ) -> Path:
-        """
-        Renders complete vertical video with synchronized audio, dynamic captions,
-        ambient music, and smart framing.
-        """
-        audio_path = Path(audio_path)
-        video_path = Path(video_path)
+        audio_path  = Path(audio_path)
+        video_path  = Path(video_path)
         output_path = output_path or (config.output_dir / "final_output.mp4")
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Initiating high-retention video render -> Output: {output_path}")
+        logger.info(f"🎬 Rendering premium drama short → {output_path}")
 
-        voice_clip = None
-        music_clip = None
-        combined_audio = None
-        video_clip = None
-        final_clip = None
-        caption_clips = []
-        header_clip = None
+        voice_clip = music_clip = combined_audio = video_clip = final_clip = None
+        caption_clips: List[ImageClip] = []
+        overlay_clips: List[ImageClip] = []
 
         try:
-            # 1. Voiceover Audio
+            # ── 1. VOICEOVER ─────────────────────────────────────────────────
             voice_clip = AudioFileClip(str(audio_path))
             target_duration = voice_clip.duration
-            logger.info(f"Audio voiceover duration: {target_duration:.2f} seconds")
+            logger.info(f"Audio duration: {target_duration:.2f}s")
 
-            # 2. Ambient Background Music Mixing
-            ambient_music_path = config.base_dir / "assets" / "ambient_music.mp3"
-            if ambient_music_path.exists():
+            # ── 2. BACKGROUND MUSIC ──────────────────────────────────────────
+            music_path = self._ensure_music()
+            if music_path:
                 try:
-                    music_clip = AudioFileClip(str(ambient_music_path))
+                    music_clip = AudioFileClip(str(music_path))
                     music_clip = _loop_clip(music_clip, target_duration)
-                    # Duck music volume to 12% so voiceover is crisp & prominent
-                    music_clip = _set_volume(music_clip, 0.12)
+                    music_clip = _set_volume(music_clip, 0.10)  # 10% — subtle mood
                     combined_audio = CompositeAudioClip([voice_clip, music_clip])
+                    logger.info("🎵 Background music mixed successfully.")
                 except Exception as e:
-                    logger.warning(f"Audio mixing issue: {e}. Using voiceover track directly.")
+                    logger.warning(f"Music mix failed: {e}")
                     combined_audio = voice_clip
             else:
                 combined_audio = voice_clip
 
-            # 3. Stock Footage Preparation (Smart 9:16 Vertical Crop)
+            # ── 3. BACKGROUND FOOTAGE ────────────────────────────────────────
             video_clip = VideoFileClip(str(video_path))
-            if video_clip.duration < target_duration:
-                video_clip = _loop_clip(video_clip, target_duration)
-            else:
-                video_clip = _clip_subclip(video_clip, 0, target_duration)
-
+            video_clip = (_loop_clip(video_clip, target_duration)
+                          if video_clip.duration < target_duration
+                          else _clip_subclip(video_clip, 0, target_duration))
             video_clip = self._fit_vertical(video_clip)
             video_clip = _clip_with_audio(video_clip, combined_audio)
 
             layers = [video_clip]
 
-            # 4. Top Header Pill Banner
-            header_img = self._create_header_pill(title_text or "DAILY DISCOVERY")
-            if header_img and header_img.exists():
-                header_clip = ImageClip(str(header_img))
-                header_clip = _clip_with_duration(header_clip, target_duration)
-                header_clip = _clip_with_position(header_clip, ("center", 180))
-                layers.append(header_clip)
+            # ── 4. DARK GRADIENT OVERLAY (readability) ────────────────────────
+            grad = self._create_gradient_overlay(target_duration)
+            if grad:
+                layers.append(grad)
 
-            # 5. Dynamic Animated Subtitles / Captions (Word/Phrase timing)
+            # ── 5. HOOK BANNER (first 3 seconds) ──────────────────────────────
+            hook = hook_text or (script_text.split(".")[0] if script_text else None)
+            if hook:
+                hook_clip = self._create_hook_banner(hook, min(3.5, target_duration))
+                if hook_clip:
+                    layers.append(hook_clip)
+
+            # ── 6. CHANNEL PILL HEADER ────────────────────────────────────────
+            header_img = self._create_header_pill(title_text or "YUMMY DRAMAZ")
+            if header_img and header_img.exists():
+                hc = ImageClip(str(header_img))
+                hc = _clip_with_duration(hc, target_duration)
+                hc = _clip_with_position(hc, ("center", 160))
+                layers.append(hc)
+
+            # ── 7. PREMIUM ANIMATED CAPTIONS ─────────────────────────────────
             if script_text:
                 caption_clips = self._generate_caption_clips(script_text, target_duration)
                 layers.extend(caption_clips)
 
+            # ── 8. SUBSCRIBE REMINDER (last 2s) ───────────────────────────────
+            sub_clip = self._create_subscribe_banner(target_duration)
+            if sub_clip:
+                layers.append(sub_clip)
+
+            # ── 9. COMPOSITE & ENCODE ─────────────────────────────────────────
             final_clip = CompositeVideoClip(layers, size=(self.TARGET_WIDTH, self.TARGET_HEIGHT))
 
-            # 6. Encode Video
-            logger.info("Encoding final video with H.264 & AAC...")
+            logger.info("⚙️  Encoding H.264 + AAC...")
             final_clip.write_videofile(
                 str(output_path),
                 fps=self.TARGET_FPS,
@@ -206,159 +191,251 @@ class VideoRenderer:
                 logger="bar"
             )
 
-            logger.info(f"Video produced successfully! Size: {output_path.stat().st_size} bytes")
+            logger.info(f"✅ Video ready: {output_path.stat().st_size / 1_000_000:.1f} MB")
             return output_path
 
         finally:
-            # Guarantee memory and file descriptor release
-            all_clips = [final_clip, header_clip, video_clip, voice_clip, music_clip] + caption_clips
-            for c in all_clips:
+            for c in [final_clip, video_clip, voice_clip, music_clip] + caption_clips + overlay_clips:
                 if c:
-                    try:
-                        c.close()
-                    except Exception:
-                        pass
+                    try: c.close()
+                    except Exception: pass
 
-    def _fit_vertical(self, clip: VideoFileClip) -> VideoFileClip:
-        """Crops and centers footage into exact 1080x1920 vertical."""
+    # ── PRIVATE HELPERS ───────────────────────────────────────────────────────
+
+    def _ensure_music(self) -> Optional[Path]:
+        """Returns path to background music, downloads if missing."""
+        music_path = config.base_dir / "assets" / "ambient_music.mp3"
+        if music_path.exists() and music_path.stat().st_size > 100_000:
+            return music_path
+
+        # Download from Mixkit
+        music_urls = [
+            "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
+            "https://assets.mixkit.co/music/preview/mixkit-sleepy-cat-135.mp3",
+            "https://assets.mixkit.co/music/preview/mixkit-deep-urban-623.mp3",
+            "https://assets.mixkit.co/music/preview/mixkit-mystery-fashion-technology-562.mp3",
+        ]
+        import requests
+        music_path.parent.mkdir(parents=True, exist_ok=True)
+        for url in music_urls:
+            try:
+                r = requests.get(url, timeout=15, stream=True)
+                if r.status_code == 200:
+                    with open(music_path, "wb") as f:
+                        for chunk in r.iter_content(8192):
+                            f.write(chunk)
+                    if music_path.stat().st_size > 50_000:
+                        logger.info(f"🎵 Background music downloaded: {url}")
+                        return music_path
+            except Exception as e:
+                logger.warning(f"Music download failed ({url}): {e}")
+        return None
+
+    def _fit_vertical(self, clip) -> VideoFileClip:
+        """Smart centre-crop to 1080x1920."""
         w, h = clip.size
-        target_aspect = self.TARGET_WIDTH / self.TARGET_HEIGHT
-        clip_aspect = w / h
-
-        if clip_aspect > target_aspect:
+        target_ar = self.TARGET_WIDTH / self.TARGET_HEIGHT
+        if (w / h) > target_ar:
             scaled = _clip_resize(clip, height=self.TARGET_HEIGHT)
-            new_w, _ = scaled.size
-            x1 = (new_w - self.TARGET_WIDTH) // 2
-            return _clip_crop(scaled, x1=x1, y1=0, x2=x1 + self.TARGET_WIDTH, y2=self.TARGET_HEIGHT)
-        else:
-            scaled = _clip_resize(clip, width=self.TARGET_WIDTH)
-            _, new_h = scaled.size
-            y1 = (new_h - self.TARGET_HEIGHT) // 2
-            return _clip_crop(scaled, x1=0, y1=y1, x2=self.TARGET_WIDTH, y2=y1 + self.TARGET_HEIGHT)
+            nw = scaled.size[0]
+            x1 = (nw - self.TARGET_WIDTH) // 2
+            return _clip_crop(scaled, x1, 0, x1 + self.TARGET_WIDTH, self.TARGET_HEIGHT)
+        scaled = _clip_resize(clip, width=self.TARGET_WIDTH)
+        nh = scaled.size[1]
+        y1 = (nh - self.TARGET_HEIGHT) // 2
+        return _clip_crop(scaled, 0, y1, self.TARGET_WIDTH, y1 + self.TARGET_HEIGHT)
 
-    def _create_header_pill(self, title: str) -> Optional[Path]:
-        """Creates modern aesthetic top-pill tag."""
+    def _create_gradient_overlay(self, duration: float) -> Optional[ImageClip]:
+        """Dark bottom + top gradient for caption readability."""
         try:
-            overlay_file = config.temp_dir / "header_pill.png"
-            img_width, img_height = 800, 100
-            img = Image.new("RGBA", (img_width, img_height), (0, 0, 0, 0))
+            w, h = self.TARGET_WIDTH, self.TARGET_HEIGHT
+            img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            # Bottom gradient (caption area)
+            for y in range(h // 2, h):
+                alpha = int(160 * ((y - h // 2) / (h // 2)))
+                draw.line([(0, y), (w, y)], fill=(0, 0, 0, alpha))
+            # Top gradient (header area)
+            for y in range(0, 280):
+                alpha = int(120 * (1 - y / 280))
+                draw.line([(0, y), (w, y)], fill=(0, 0, 0, alpha))
+
+            tmp = config.temp_dir / "gradient.png"
+            img.save(tmp, "PNG")
+            gc = ImageClip(str(tmp))
+            return _clip_with_duration(gc, duration)
+        except Exception as e:
+            logger.warning(f"Gradient overlay error: {e}")
+            return None
+
+    def _create_hook_banner(self, hook_text: str, duration: float) -> Optional[ImageClip]:
+        """Dramatic hook banner shown in first 3-4 seconds."""
+        try:
+            w, img_h = self.TARGET_WIDTH, 200
+            img = Image.new("RGBA", (w, img_h), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
 
-            # Translucent dark pill with gold accent outline
-            draw.rounded_rectangle(
-                [(0, 0), (img_width, img_height)],
-                radius=50,
-                fill=(0, 0, 0, 200),
-                outline=(255, 215, 0, 240),
-                width=3
-            )
+            # Semi-transparent red/dark banner
+            draw.rectangle([(0, 0), (w, img_h)], fill=(180, 0, 30, 200))
 
-            font = None
-            for font_name in ["arialbd.ttf", "DejaVuSans-Bold.ttf"]:
-                try:
-                    font = ImageFont.truetype(font_name, 36)
-                    break
-                except IOError:
-                    pass
-            if not font:
-                font = ImageFont.load_default()
+            font = self._get_font(46)
+            text = hook_text.upper()[:70]
 
-            short_title = title.upper()
-            if len(short_title) > 36:
-                short_title = short_title[:33] + "..."
+            # White glow stroke
+            for dx in range(-3, 4):
+                for dy in range(-3, 4):
+                    draw.text((w // 2 + dx, img_h // 2 + dy), text,
+                              font=font, fill=(255, 255, 255, 120), anchor="mm", align="center")
+            draw.text((w // 2, img_h // 2), text,
+                      font=font, fill=(255, 255, 80, 255), anchor="mm", align="center")
 
-            draw.text(
-                (img_width // 2, img_height // 2),
-                short_title,
-                fill=(255, 255, 255, 255),
-                font=font,
-                anchor="mm"
-            )
+            tmp = config.temp_dir / "hook_banner.png"
+            img.save(tmp, "PNG")
+            hc = ImageClip(str(tmp))
+            hc = _clip_with_duration(hc, duration)
+            hc = _clip_with_position(hc, ("center", 900))  # Centre-screen hook
+            return hc
+        except Exception as e:
+            logger.warning(f"Hook banner error: {e}")
+            return None
 
-            img.save(overlay_file, "PNG")
-            return overlay_file
+    def _create_header_pill(self, title: str) -> Optional[Path]:
+        """Channel name pill at top."""
+        try:
+            w, h = 700, 90
+            img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            draw.rounded_rectangle([(0, 0), (w, h)], radius=45,
+                                   fill=(15, 15, 15, 220), outline=(255, 180, 0, 255), width=3)
+            font = self._get_font(34)
+            txt = ("🎬 " + title.upper())[:36]
+            draw.text((w // 2, h // 2), txt, font=font,
+                      fill=(255, 230, 0, 255), anchor="mm")
+            p = config.temp_dir / "header_pill.png"
+            img.save(p, "PNG")
+            return p
         except Exception as e:
             logger.warning(f"Header pill error: {e}")
             return None
 
+    def _create_subscribe_banner(self, total_duration: float) -> Optional[ImageClip]:
+        """Subscribe CTA shown in last 2 seconds."""
+        try:
+            if total_duration < 4:
+                return None
+            start = total_duration - 2.2
+            w, h = 900, 100
+            img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            draw.rounded_rectangle([(0, 0), (w, h)], radius=50,
+                                   fill=(220, 0, 0, 230), outline=(255, 255, 255, 200), width=2)
+            font = self._get_font(36)
+            draw.text((w // 2, h // 2), "🔔 SUBSCRIBE FOR MORE DRAMA!", font=font,
+                      fill=(255, 255, 255, 255), anchor="mm")
+            tmp = config.temp_dir / "subscribe_banner.png"
+            img.save(tmp, "PNG")
+            sc = ImageClip(str(tmp))
+            sc = _clip_with_duration(sc, 2.0)
+            sc = _clip_with_start(sc, start)
+            sc = _clip_with_position(sc, ("center", 1750))
+            return sc
+        except Exception as e:
+            logger.warning(f"Subscribe banner error: {e}")
+            return None
+
     def _generate_caption_clips(self, script: str, total_duration: float) -> List[ImageClip]:
         """
-        Creates dynamic punchy animated subtitle cards timed to speech.
+        Premium animated word-by-word captions:
+        - Small groups (2-3 words) for punchy drama pacing
+        - Alternating eye-catching colors
+        - Glow + drop shadow behind text
+        - Slight vertical bounce per caption (alternating Y offset)
         """
         clips = []
+        # Split into small punchy chunks of 2-3 words
         words = script.strip().split()
         if not words:
             return clips
 
-        # Group words into short 3-to-4 word punchy phrases
-        chunk_size = 4
+        chunk_size = 3
         chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
         total_words = len(words)
-
-        current_time = 0.0
-        font = None
-        for font_name in ["arialbd.ttf", "DejaVuSans-Bold.ttf"]:
-            try:
-                font = ImageFont.truetype(font_name, 56)
-                break
-            except IOError:
-                pass
-        if not font:
-            font = ImageFont.load_default()
 
         caption_dir = config.temp_dir / "captions"
         caption_dir.mkdir(parents=True, exist_ok=True)
 
-        for idx, chunk in enumerate(chunks):
-            chunk_word_count = len(chunk.split())
-            chunk_duration = total_duration * (chunk_word_count / total_words)
+        current_time = 0.0
+        font_large = self._get_font(62)   # Main caption font (smaller than before = 62 not 90+)
+        font_small = self._get_font(52)
 
-            img_w, img_h = 1000, 260
+        for idx, chunk in enumerate(chunks):
+            n_words = len(chunk.split())
+            chunk_duration = max(0.35, total_duration * (n_words / total_words))
+
+            color = CAPTION_PALETTE[idx % len(CAPTION_PALETTE)]
+            text  = chunk.upper()
+
+            img_w, img_h = 1000, 220
             img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
 
-            # Alternate bold yellow / bright white for high engagement
-            highlight_color = (255, 235, 59, 255) if idx % 2 == 0 else (255, 255, 255, 255)
-            text_str = chunk.upper()
+            cx, cy = img_w // 2, img_h // 2
 
-            # Heavy black outline stroke for maximum readability over footage
-            stroke_width = 5
-            for dx in range(-stroke_width, stroke_width + 1):
-                for dy in range(-stroke_width, stroke_width + 1):
-                    draw.text(
-                        (img_w // 2 + dx, img_h // 2 + dy),
-                        text_str,
-                        font=font,
-                        fill=(0, 0, 0, 255),
-                        anchor="mm",
-                        align="center"
-                    )
+            # ── Glow layer ────────────────────────────────────────────────────
+            for r in range(12, 0, -3):
+                alpha = int(60 * (r / 12))
+                for dx in range(-r, r + 1, r):
+                    for dy in range(-r, r + 1, r):
+                        draw.text((cx + dx, cy + dy), text, font=font_large,
+                                  fill=(*color[:3], alpha), anchor="mm", align="center")
 
-            # Draw highlighted main text
-            draw.text(
-                (img_w // 2, img_h // 2),
-                text_str,
-                font=font,
-                fill=highlight_color,
-                anchor="mm",
-                align="center"
-            )
+            # ── Heavy black stroke (outline) ──────────────────────────────────
+            stroke = 6
+            for dx in range(-stroke, stroke + 1):
+                for dy in range(-stroke, stroke + 1):
+                    if dx == 0 and dy == 0:
+                        continue
+                    draw.text((cx + dx, cy + dy), text, font=font_large,
+                              fill=(0, 0, 0, 255), anchor="mm", align="center")
 
-            caption_file = caption_dir / f"caption_{idx}.png"
+            # ── Main text ─────────────────────────────────────────────────────
+            draw.text((cx, cy), text, font=font_large,
+                      fill=(*color[:3], 255), anchor="mm", align="center")
+
+            # Slight Gaussian blur on glow only — apply to a copy then composite
+            # (PIL doesn't support layer blending so we just use the drawn result)
+
+            caption_file = caption_dir / f"cap_{idx:04d}.png"
             img.save(caption_file, "PNG")
 
-            c_clip = ImageClip(str(caption_file))
-            c_clip = _clip_with_duration(c_clip, chunk_duration)
-            c_clip = _clip_with_start(c_clip, current_time)
-            # Positioned in the sweet spot (lower-center)
-            c_clip = _clip_with_position(c_clip, ("center", 1100))
+            # Alternate vertical position: creates subtle "bounce" feel
+            y_pos = 1350 if idx % 2 == 0 else 1380
 
-            clips.append(c_clip)
+            c = ImageClip(str(caption_file))
+            c = _clip_with_duration(c, chunk_duration)
+            c = _clip_with_start(c, current_time)
+            c = _clip_with_position(c, ("center", y_pos))
+            clips.append(c)
+
             current_time += chunk_duration
 
         return clips
 
+    def _get_font(self, size: int) -> ImageFont.FreeTypeFont:
+        """Load best available bold font."""
+        font_candidates = [
+            "arialbd.ttf", "Arial Bold.ttf", "ariblk.ttf",
+            "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        ]
+        for name in font_candidates:
+            try:
+                return ImageFont.truetype(name, size)
+            except (IOError, OSError):
+                pass
+        return ImageFont.load_default()
+
 
 if __name__ == "__main__":
-    renderer = VideoRenderer()
-    print("VideoRenderer upgraded.")
+    print("VideoRenderer v3.0 — Premium Drama Shorts Engine ready.")

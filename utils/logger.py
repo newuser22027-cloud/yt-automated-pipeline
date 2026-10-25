@@ -23,7 +23,12 @@ logger.setLevel(logging.INFO)
 
 # Avoid duplicate handlers on reload
 if not logger.handlers:
-    # Console formatting
+    # Console formatting with UTF-8 safe encoding
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     c_handler = logging.StreamHandler(sys.stdout)
     c_format = logging.Formatter(
         "[%(asctime)s] [%(levelname)s] [%(filename)s:%(lineno)d]: %(message)s",

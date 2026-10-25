@@ -1,10 +1,14 @@
 """
-Master Orchestration Engine.
-Coordinates the end-to-end headless pipeline: script synthesis, TTS generation,
-stock media acquisition, vertical shorts rendering, and YouTube auto-publication.
+Master Orchestration Engine — v3.0
+Pipeline:
+  0. Analytics check (avoid repeating recent topics)
+  1. Content synthesis (drama script + SEO metadata)
+  2. Neural TTS voiceover (fast, no dead pauses)
+  3. Stock footage acquisition
+  4. Premium vertical video render (animated captions + music + hook)
+  5. YouTube upload (SEO metadata + auto thumbnail)
 """
 
-import os
 import sys
 import json
 import time
@@ -27,118 +31,130 @@ def execute_pipeline(
     privacy_status: str = "public",
     max_retries: int = 3
 ) -> str:
-    """
-    Executes the automated content engine with built-in retries and telemetry.
-    Returns the YouTube video ID if uploaded, or local output path if dry-run.
-    """
     logger.info("=" * 70)
-    logger.info(" STARTING AUTOMATED YOUTUBE CONTENT ENGINE")
+    logger.info(" YUMMY DRAMAZ — AUTOMATED SHORTS ENGINE v3.0")
     logger.info("=" * 70)
 
-    # Initialize submodules
-    content_gen = ContentGenerator()
-    audio_gen = AudioGenerator()
-    media_fetcher = MediaFetcher()
-    renderer = VideoRenderer()
-    uploader = YouTubeUploader() if not dry_run else None
+    content_gen  = ContentGenerator()
+    audio_gen    = AudioGenerator()
+    media_fetch  = MediaFetcher()
+    renderer     = VideoRenderer()
+    uploader     = YouTubeUploader() if not dry_run else None
 
-    # Step 1: Content Synthesis
-    logger.info("[1/5] Generating script, metadata, and visual keywords...")
+    # ── Step 0: Analytics check ───────────────────────────────────────────────
+    logger.info("[0/5] 📊 Checking channel analytics to pick fresh topic...")
+    try:
+        analytics = content_gen.get_analytics_summary()
+        recent = analytics.get("recent_titles", [])
+        if recent:
+            logger.info(f"   Recent videos: {recent[:3]}")
+        else:
+            logger.info("   No previous videos found — picking fresh topic.")
+    except Exception as e:
+        logger.warning(f"   Analytics check skipped: {e}")
+
+    # ── Step 1: Content Generation ────────────────────────────────────────────
+    logger.info("[1/5] 🧠 Generating drama script + SEO metadata...")
     content = content_gen.generate(niche=niche)
-    
+
+    # Log what was generated
+    logger.info(f"   📝 Title:    {content.get('title', 'N/A')}")
+    logger.info(f"   🎯 Category: {content.get('category', 'Drama')}")
+    logger.info(f"   🔍 Keyword:  {content.get('search_keyword', 'N/A')}")
+
     metadata_path = config.output_dir / "metadata.json"
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
     with open(metadata_path, "w", encoding="utf-8") as f:
         json.dump(content, f, indent=2, ensure_ascii=False)
-    logger.info(f"Metadata recorded to: {metadata_path}")
 
-    # Step 2: Voiceover Synthesis
-    logger.info("[2/5] Synthesizing neural TTS voiceover...")
+    # ── Step 2: Voiceover ─────────────────────────────────────────────────────
+    logger.info("[2/5] 🎙️  Synthesizing neural TTS voiceover (no dead pauses)...")
     audio_path = audio_gen.generate(
         text=content["script"],
         output_filename="voiceover.mp3"
     )
 
-    # Step 3: Stock Video Acquisition with retry
-    logger.info(f"[3/5] Querying visual stock footage for '{content['search_keyword']}'...")
+    # ── Step 3: Stock Footage ─────────────────────────────────────────────────
+    logger.info(f"[3/5] 🎬 Fetching HD footage for: '{content['search_keyword']}'...")
     video_stock_path = None
     for attempt in range(1, max_retries + 1):
         try:
-            video_stock_path = media_fetcher.fetch_video(
-                keyword=content["search_keyword"]
-            )
+            video_stock_path = media_fetch.fetch_video(keyword=content["search_keyword"])
             if video_stock_path and video_stock_path.exists():
                 break
         except Exception as e:
-            logger.warning(f"Media fetch attempt {attempt} failed: {e}")
+            logger.warning(f"   Media fetch attempt {attempt} failed: {e}")
             if attempt == max_retries:
                 raise
 
-    # Step 4: Vertical Video Assembly & Encoding
-    logger.info("[4/5] Rendering 1080x1920 vertical Shorts video...")
+    # ── Step 4: Video Render ──────────────────────────────────────────────────
+    logger.info("[4/5] ⚙️  Rendering premium 1080x1920 drama short...")
     output_video_path = config.output_dir / "final_output.mp4"
     for attempt in range(1, max_retries + 1):
         try:
             renderer.render(
                 audio_path=audio_path,
                 video_path=video_stock_path,
-                title_text=content["title"],
+                title_text=content.get("title", "YUMMY DRAMAZ"),
                 script_text=content["script"],
+                hook_text=content.get("hook"),
                 output_path=output_video_path
             )
             if output_video_path.exists() and output_video_path.stat().st_size > 0:
                 break
         except Exception as e:
-            logger.warning(f"Video render attempt {attempt} failed: {e}")
+            logger.warning(f"   Render attempt {attempt} failed: {e}")
             if attempt == max_retries:
                 raise
             time.sleep(2)
 
-    # Step 5: Publishing & Telemetry
+    size_mb = output_video_path.stat().st_size / 1_000_000
+    logger.info(f"   ✅ Video rendered: {size_mb:.1f} MB")
+
+    # ── Step 5: Upload ────────────────────────────────────────────────────────
     if dry_run:
-        logger.info("[5/5] DRY-RUN enabled. Skipping YouTube publication.")
+        logger.info("[5/5] 🧪 DRY-RUN — skipping YouTube upload.")
         send_alert(
             status="INFO",
-            title="Pipeline Executed in Dry-Run Mode",
-            details=f"Video successfully rendered locally.\nTitle: **{content['title']}**",
-            fields={
-                "Output Video": str(output_video_path),
-                "Keywords": content["search_keyword"]
-            }
+            title="Dry-Run Complete",
+            details=f"Video rendered locally.\nTitle: **{content['title']}**",
+            fields={"Output": str(output_video_path), "Size": f"{size_mb:.1f} MB"}
         )
         return str(output_video_path)
 
-    logger.info("[5/5] Publishing video to YouTube...")
+    logger.info("[5/5] 📤 Publishing to YouTube with full SEO metadata...")
     video_id = uploader.upload(
         video_path=output_video_path,
         metadata=content,
         privacy_status=privacy_status
     )
 
-    youtube_url = f"https://youtu.be/{video_id}"
-    logger.info(f"Video live at: {youtube_url}")
+    url = f"https://youtu.be/{video_id}"
+    logger.info(f"   🔗 Live at: {url}")
 
-    # Dispatch Success Alert
     send_alert(
         status="SUCCESS",
-        title="New Daily Video Published!",
-        details=f"Successfully rendered and published YouTube Shorts video.",
+        title="✅ New Drama Short Published!",
+        details=f"Successfully published to Yummy Dramaz.",
         fields={
-            "Title": content["title"],
-            "YouTube URL": youtube_url,
-            "Privacy": privacy_status.capitalize(),
-            "Search Keyword": content["search_keyword"]
+            "Title":    content["title"],
+            "URL":      url,
+            "Category": content.get("category", "Drama"),
+            "Privacy":  privacy_status.capitalize()
         }
     )
-
     return video_id
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Headless YouTube Shorts Automation Engine")
-    parser.add_argument("--niche", type=str, default=None, help="Custom topic niche for script generation")
-    parser.add_argument("--dry-run", "--skip-upload", dest="dry_run", action="store_true", help="Render video without uploading to YouTube")
-    parser.add_argument("--privacy", type=str, default="public", choices=["public", "unlisted", "private"], help="YouTube publication privacy level")
-    parser.add_argument("--retries", type=int, default=3, help="Max retry attempts for network/rendering steps")
+    parser = argparse.ArgumentParser(description="Yummy Dramaz — Automated Shorts Engine")
+    parser.add_argument("--niche",    type=str, default=None,
+                        help="Custom topic override (e.g. 'a husband who hid a secret family')")
+    parser.add_argument("--dry-run",  dest="dry_run", action="store_true",
+                        help="Render video locally without uploading")
+    parser.add_argument("--privacy",  type=str, default="public",
+                        choices=["public", "unlisted", "private"])
+    parser.add_argument("--retries",  type=int, default=3)
 
     args = parser.parse_args()
 
@@ -151,15 +167,13 @@ def main():
         )
         sys.exit(0)
     except Exception as e:
-        error_trace = traceback.format_exc()
-        logger.critical(f"FATAL PIPELINE CRASH:\n{error_trace}")
-
-        # Dispatch Failure Alert to Webhook
+        tb = traceback.format_exc()
+        logger.critical(f"FATAL PIPELINE ERROR:\n{tb}")
         send_alert(
             status="FAILURE",
-            title="Automation Pipeline Crashed",
-            details=f"An unhandled error occurred during workflow execution:\n```{str(e)[:1500]}```",
-            fields={"Exception Type": type(e).__name__}
+            title="❌ Pipeline Crashed",
+            details=f"```{str(e)[:1200]}```",
+            fields={"Exception": type(e).__name__}
         )
         sys.exit(1)
 

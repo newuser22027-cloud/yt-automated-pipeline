@@ -105,8 +105,11 @@ class VideoRenderer:
         output_path: Optional[Path] = None,
         hook_text: Optional[str] = None,
     ) -> Path:
-        audio_path  = Path(audio_path)
-        video_path  = Path(video_path)
+        audio_path = Path(audio_path)
+        if isinstance(video_path, list):
+            video_paths = [Path(p) for p in video_path]
+        else:
+            video_paths = [Path(video_path)]
         output_path = output_path or (config.output_dir / "final_output.mp4")
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -150,8 +153,7 @@ class VideoRenderer:
                 combined_audio = voice_clip
 
             # ── 3. BACKGROUND FOOTAGE (MULTI-SCENE MONTAGE) ─────────────────
-            raw_video_paths = video_path if isinstance(video_path, list) else [video_path]
-            video_clip = self._build_multi_scene_clip(raw_video_paths, target_duration)
+            video_clip = self._build_multi_scene_clip(video_paths, target_duration)
             video_clip = _clip_with_audio(video_clip, combined_audio)
 
             layers = [video_clip]

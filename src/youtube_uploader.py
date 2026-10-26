@@ -55,6 +55,10 @@ class YouTubeUploader:
         creds.refresh(Request())
         return build("youtube", "v3", credentials=creds)
 
+    def _get_authenticated_service(self):
+        """Backward-compatible alias for _get_service."""
+        return self._get_service()
+
     def upload(
         self,
         video_path: Path,

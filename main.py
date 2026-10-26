@@ -68,11 +68,17 @@ def execute_pipeline(
         json.dump(content, f, indent=2, ensure_ascii=False)
 
     # ── Step 2: Voiceover ─────────────────────────────────────────────────────
-    logger.info("[2/5] 🎙️  Synthesizing neural TTS voiceover (no dead pauses)...")
-    audio_path = audio_gen.generate(
-        text=content["script"],
-        output_filename="voiceover.mp3"
-    )
+    logger.info("[2/5] 🎭 Synthesizing multi-voice character acting voiceover...")
+    if "dialogues" in content and isinstance(content["dialogues"], list) and len(content["dialogues"]) > 0:
+        audio_path = audio_gen.generate_dialogues(
+            dialogues=content["dialogues"],
+            output_filename="voiceover.mp3"
+        )
+    else:
+        audio_path = audio_gen.generate(
+            text=content["script"],
+            output_filename="voiceover.mp3"
+        )
 
     # ── Step 3: Stock Footage ─────────────────────────────────────────────────
     logger.info(f"[3/5] 🎬 Fetching HD footage for: '{content['search_keyword']}'...")

@@ -1,10 +1,8 @@
 """
-Content Generator Module — UPGRADED v3.0
-- Drama/Movies/Stories niche support for "Yummy Dramaz" channel
-- YouTube Analytics check before each new video (avoid repeat topics)
-- Strong hook-first script structure (retain viewers in first 3 sec)
-- Fully SEO-optimized title, description, tags, hashtags
-- High-CPM Tier-1 audience targeting (US/UK/CA/AU)
+Content Generator Module — UPGRADED v3.1 (Multi-Voice Acting Edition)
+- Generates structured drama dialogues with Speaker tags (Narrator, Male, Female)
+- Strong hook-first script structure for Yummy Dramaz
+- Full SEO metadata & YouTube Analytics awareness
 """
 
 import os
@@ -18,10 +16,7 @@ from src.config import config
 from utils.logger import logger
 
 
-# ── NICHE CONFIGURATION ──────────────────────────────────────────────────────
-# Channel: "Yummy Dramaz" — Drama/Movies/Stories/Psychology
-# Targeting: US, UK, Canada, Australia (High-CPM Tier-1)
-CHANNEL_NICHE = "drama-stories"   # options: "drama-stories" | "finance" | "psychology" | "tech"
+CHANNEL_NICHE = "drama-stories"
 
 DRAMA_TOPICS = [
     "a shocking betrayal that changed a family forever",
@@ -46,40 +41,35 @@ DRAMA_TOPICS = [
 
 
 class ContentGenerator:
-    """Handles script generation with analytics feedback and SEO optimization."""
+    """Handles script generation with multi-character acting dialogues and SEO."""
 
     def __init__(self, openai_key: Optional[str] = None, gemini_key: Optional[str] = None):
         self.openai_key = openai_key or config.openai_api_key
         self.gemini_key = gemini_key or config.gemini_api_key
         self._used_topics_cache: List[str] = []
 
-    # ── PUBLIC METHODS ────────────────────────────────────────────────────────
-
     def generate(self, niche: str = None) -> Dict[str, Any]:
         """
-        Generates complete video package.
-        1. Checks analytics to pick a fresh topic
-        2. Tries Gemini API (free)
-        3. Falls back to curated pool
+        Generates complete video package with multi-voice dialogues.
         """
         topic = self._pick_smart_topic(niche)
-        logger.info(f"Generating content for topic: '{topic}'")
+        logger.info(f"Generating multi-voice content for topic: '{topic}'")
 
         prompt = self._build_drama_prompt(topic)
 
         # Try Gemini free tier first
         if self.gemini_key and len(self.gemini_key) > 20:
             try:
-                logger.info("Attempting via Google Gemini API (Free)...")
+                logger.info("Attempting via Google Gemini API (Free Multi-Voice)...")
                 data = self._generate_gemini(prompt)
                 if data and self._validate_content(data):
                     data = self._enrich_metadata(data, topic)
-                    logger.info(f"✅ Gemini generated: '{data['title']}'")
+                    logger.info(f"✅ Gemini generated: '{data['title']}' with {len(data.get('dialogues', []))} lines")
                     return data
             except Exception as e:
                 logger.warning(f"Gemini error: {e}")
 
-        # Try OpenAI
+        # Try OpenAI if available
         if self.openai_key and "sk-proj-xxxx" not in self.openai_key:
             try:
                 from openai import OpenAI
@@ -89,11 +79,11 @@ class ContentGenerator:
                     model="gpt-4o-mini",
                     response_format={"type": "json_object"},
                     messages=[
-                        {"role": "system", "content": "You are a viral YouTube Shorts script writer. Output only valid JSON."},
+                        {"role": "system", "content": "You are a viral YouTube Shorts script writer specialized in multi-character dramatic acting scripts. Output only valid JSON."},
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.82,
-                    max_tokens=700
+                    max_tokens=800
                 )
                 data = json.loads(response.choices[0].message.content)
                 if self._validate_content(data):
@@ -104,14 +94,11 @@ class ContentGenerator:
                 logger.warning(f"OpenAI error: {e}")
 
         # Curated fallback
-        logger.warning("Using curated drama content pool.")
+        logger.warning("Using curated multi-voice drama content pool.")
         return self._generate_fallback(topic)
 
     def get_analytics_summary(self) -> Dict[str, Any]:
-        """
-        Fetches last 5 uploaded video titles from YouTube to avoid repeating topics.
-        Returns dict with list of recent titles.
-        """
+        """Fetches last uploaded video titles from YouTube to avoid repeating topics."""
         try:
             from google.oauth2.credentials import Credentials
             from google.auth.transport.requests import Request
@@ -131,7 +118,6 @@ class ContentGenerator:
             creds.refresh(Request())
             youtube = build("youtube", "v3", credentials=creds)
 
-            # Get channel's own videos
             search_resp = youtube.search().list(
                 part="snippet",
                 forMine=True,
@@ -152,18 +138,14 @@ class ContentGenerator:
             logger.warning(f"Could not fetch analytics (non-critical): {e}")
             return {"recent_titles": []}
 
-    # ── PRIVATE METHODS ───────────────────────────────────────────────────────
-
     def _pick_smart_topic(self, niche_override: str = None) -> str:
-        """Picks a topic not recently used, based on analytics."""
+        """Picks a topic not recently used."""
         if niche_override:
             return niche_override
 
-        # Fetch recent titles to avoid repetition
         analytics = self.get_analytics_summary()
         recent_titles = [t.lower() for t in analytics.get("recent_titles", [])]
 
-        # Filter out topics that are similar to recent ones
         available = []
         for topic in DRAMA_TOPICS:
             topic_words = set(topic.lower().split())
@@ -175,39 +157,51 @@ class ContentGenerator:
                 available.append(topic)
 
         if not available:
-            available = DRAMA_TOPICS  # reset if all used
+            available = DRAMA_TOPICS
 
         return random.choice(available)
 
     def _build_drama_prompt(self, topic: str) -> str:
-        """Builds a drama-focused viral Shorts prompt with strong hook."""
+        """Builds a multi-character dialogue prompt."""
         return f"""
-You are a VIRAL YouTube Shorts creator for the channel "Yummy Dramaz".
-Your audience is in the US, UK, Canada, and Australia (High-CPM viewers).
-Content niche: dramatic stories, dark psychology, betrayal, revenge, love gone wrong, shocking twists.
+You are a top-tier viral YouTube Shorts drama producer for the channel "Yummy Dramaz".
+Target Audience: US, UK, Canada, Australia (High-CPM viewers).
+Topic: "{topic}"
 
-Create a 35-45 second YouTube Short script about: "{topic}"
+Generate an intense 35-45 second dramatic short script structured as a realistic multi-character scene.
+Characters can be:
+- "narrator" (suspenseful narrator setting up the scene and emotional reactions)
+- "male" (husband, boyfriend, detective, ex, or brother)
+- "female" (wife, girlfriend, sister, or mother)
 
 STRICT RULES:
-1. "hook": First 2-3 sentences ONLY. Must be SHOCKING and make viewer UNABLE to scroll away. 
-   Start with phrases like: "Nobody knew that...", "She had no idea...", "What he discovered changed everything...", "For 5 years, she hid the truth..."
-2. "script": Full 75-95 word spoken narrative. Hook first, then story build-up, end with cliffhanger or question. NO filler intro. Immediate tension.
-3. "title": Ultra-clickbait, emotional, under 90 chars. Examples: "She Faked Her Own Death To Escape Him 💔", "He Didn't Know His Wife Had A Secret Family 😱"
-4. "description": 2-3 emotional sentences about the story + call to action + 5-7 hashtags. Include: #YummyDramaz #Shorts #Drama
-5. "tags": Exactly 12 high-search tags targeting US/UK drama audience. Include: shorts, drama, betrayal, story, shocking, etc.
-6. "search_keyword": 1-2 word visual search term for background footage (e.g. "couple arguing", "luxury house", "sad woman", "dark room", "city night").
-7. "thumbnail_text": 3-5 word bold emotional text to overlay on thumbnail (e.g. "SHE FAKED HER DEATH 😱").
-8. "category": One of: Drama, Psychology, True Crime, Love Story, Revenge.
-9. "hashtags": Array of 5 trending hashtags starting with #.
+1. "hook": First 2-3 sentences. Shocking, high curiosity, instant tension.
+2. "dialogues": Array of 4 to 6 dialogue turns. Each turn has:
+   - "speaker": exactly "narrator", "male", or "female"
+   - "text": the exact words spoken (punchy, emotional, realistic, no long monologues)
+3. "script": Full concatenated spoken text of all dialogues combined (75-95 words).
+4. "title": Ultra-clickbait, high CTR, emotional under 90 chars + emojis + #Shorts.
+5. "description": 2-3 emotional sentences + call to action + 5 hashtags.
+6. "tags": Exactly 12 high-search drama tags.
+7. "search_keyword": 1-2 words visual search term (e.g. "couple arguing", "luxury mansion", "crying woman").
+8. "thumbnail_text": 3-5 word bold emotional text (e.g. "HE HAD TWO WIVES 😱").
+9. "category": "Drama" or "Psychology" or "Revenge".
+10. "hashtags": Array of 5 hashtags including #YummyDramaz and #Shorts.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON matching this schema:
 {{
   "title": "string",
   "hook": "string",
+  "dialogues": [
+    {{"speaker": "narrator", "text": "Nobody warned her. She grabbed his phone..."}},
+    {{"speaker": "male", "text": "Why are you touching my phone? Put it back!"}},
+    {{"speaker": "female", "text": "Who is Karen? And why are there photos of three kids?"}},
+    {{"speaker": "narrator", "text": "His face went pale. The marriage was over."}}
+  ],
   "script": "string",
   "description": "string",
-  "tags": ["tag1",...],
-  "hashtags": ["#tag1",...],
+  "tags": ["tag1", "tag2"],
+  "hashtags": ["#tag1", "#tag2"],
   "search_keyword": "string",
   "thumbnail_text": "string",
   "category": "string"
@@ -228,16 +222,21 @@ Return ONLY valid JSON:
         raise RuntimeError(f"Gemini HTTP {res.status_code}: {res.text[:200]}")
 
     def _validate_content(self, data: Dict) -> bool:
-        """Ensures required fields present."""
         return all(k in data for k in ["title", "script", "description", "tags"])
 
     def _enrich_metadata(self, data: Dict, topic: str) -> Dict:
-        """Adds missing fields and appends channel branding."""
-        # Ensure hook is prepended to script for TTS if hook exists separately
-        if "hook" in data and data["hook"] and data["hook"] not in data["script"]:
-            data["script"] = data["hook"] + " " + data["script"]
+        """Enriches metadata and ensures valid dialogues array."""
+        # Ensure dialogues exist
+        if "dialogues" not in data or not isinstance(data["dialogues"], list) or len(data["dialogues"]) == 0:
+            # Fallback construct dialogues from script
+            script = data.get("script", "")
+            data["dialogues"] = [
+                {"speaker": "narrator", "text": script}
+            ]
 
-        # Add hashtags to description if not present
+        # Re-derive clean concatenated script from dialogues
+        data["script"] = " ".join([d.get("text", "").strip() for d in data["dialogues"] if d.get("text")])
+
         if "hashtags" not in data:
             data["hashtags"] = ["#YummyDramaz", "#Shorts", "#Drama", "#Story", "#Viral"]
 
@@ -245,19 +244,16 @@ Return ONLY valid JSON:
         if hashtag_str not in data["description"]:
             data["description"] = data["description"].strip() + f"\n\n{hashtag_str}"
 
-        # Channel branding footer
         data["description"] += (
-            "\n\n🔔 Subscribe to Yummy Dramaz for daily shocking stories!"
+            "\n\n🔔 Subscribe to Yummy Dramaz for daily shocking drama stories!"
             "\n💬 Comment your reaction below!"
             "\n❤️ Like if this story shocked you!"
         )
 
-        # SEO fields
-        data.setdefault("category_id", "24")  # 24 = Entertainment
+        data.setdefault("category_id", "24")
         data.setdefault("thumbnail_text", data["title"][:30].upper())
         data.setdefault("search_keyword", "drama")
 
-        # Ensure #Shorts tag for YouTube algorithm
         if "shorts" not in [t.lower() for t in data.get("tags", [])]:
             data.setdefault("tags", []).append("shorts")
         if "#Shorts" not in data.get("hashtags", []):
@@ -266,25 +262,39 @@ Return ONLY valid JSON:
         return data
 
     def _generate_fallback(self, topic: str) -> Dict[str, Any]:
-        """High-retention drama fallback pool for Yummy Dramaz."""
+        """Multi-character dramatic fallback pool."""
         pool = [
             {
-                "title": "She Found Texts That Destroyed Her Marriage 💔 #Shorts",
-                "hook": "Nobody warned her. She grabbed his phone for a second — and found 5 years of lies.",
-                "script": "Nobody warned her. She grabbed his phone for a second — and found 5 years of lies. Over 200 messages. Another woman. Another family. Her hands shook as she scrolled through the photos — her husband at a birthday party she never knew existed. Three kids smiled back at her from the screen. She had been the wife. But she was never his only one. What would YOU do in her place?",
-                "description": "A shocking story of betrayal that no wife should ever experience. Sometimes the person you trust most hides the darkest secrets. #YummyDramaz #Shorts #Drama #Betrayal #Story",
+                "title": "She Found 5 Years of Lies in 30 Seconds 💔 #Shorts",
+                "hook": "Nobody warned her. She picked up his ringing phone and her entire world shattered.",
+                "dialogues": [
+                    {"speaker": "narrator", "text": "Nobody warned her. She picked up his ringing phone and her entire life shattered."},
+                    {"speaker": "female", "text": "Hello? Who is this? Why are you calling my husband at midnight?"},
+                    {"speaker": "narrator", "text": "The voice on the other end went silent, before whispering six chilling words."},
+                    {"speaker": "female", "text": "Your husband? Honey, he’s been married to me for seven years."},
+                    {"speaker": "male", "text": "Give me the phone! You were never supposed to answer that!"},
+                    {"speaker": "narrator", "text": "Two hundred photos. Another family. What would you do in her place? Comment below."}
+                ],
+                "description": "A shocking true story of betrayal that no wife should ever experience. When the person you trust most lives a complete double life. #YummyDramaz #Shorts #Drama #Betrayal #Story",
                 "tags": ["drama shorts", "betrayal story", "shocking story", "marriage betrayal", "true story", "drama", "shorts", "yummy dramaz", "cheating husband", "viral story", "emotional story", "relationship"],
                 "hashtags": ["#YummyDramaz", "#Shorts", "#Drama", "#Betrayal", "#ShockingStory"],
-                "search_keyword": "sad woman",
-                "thumbnail_text": "5 YEARS OF LIES 😱",
+                "search_keyword": "sad woman phone",
+                "thumbnail_text": "HE HAD TWO WIVES 😱",
                 "category": "Drama",
                 "category_id": "24"
             },
             {
-                "title": "He Discovered His Wife Had A Secret Family 😱 #Shorts",
-                "hook": "For 7 years, he thought he was her only husband. He was wrong.",
-                "script": "For 7 years, he thought he was her only husband. He was wrong. It started with a stranger calling his home asking for \"Mrs. Karen.\" Then a lawyer's letter arrived — his wife had filed for divorce in another state. She had a second husband. Two daughters. A whole life he knew nothing about. When he confronted her, she simply said — you were never supposed to find out. What would you do?",
-                "description": "When trust is shattered beyond repair — a shocking story of a double life no one saw coming. #YummyDramaz #Shorts #Drama #ShockingStory #TrueCrime",
+                "title": "His Secret Family Was Finally Exposed 😳 #Shorts",
+                "hook": "For seven years, he thought he was her only husband. He was dead wrong.",
+                "dialogues": [
+                    {"speaker": "narrator", "text": "For seven years, he thought he was her only husband. He was dead wrong."},
+                    {"speaker": "male", "text": "Who is Karen? A lawyer just served divorce papers at our door!"},
+                    {"speaker": "female", "text": "It was never personal. You were just my backup plan."},
+                    {"speaker": "narrator", "text": "She packed her bags without shedding a single tear."},
+                    {"speaker": "male", "text": "Ten years together, and you feel nothing? Absolutely nothing?"},
+                    {"speaker": "narrator", "text": "She looked right into his eyes and smiled. Karma has no deadline."}
+                ],
+                "description": "When trust is shattered beyond repair. A shocking confrontation uncovering a double life. #YummyDramaz #Shorts #Drama #ShockingStory #TrueCrime",
                 "tags": ["shocking story", "drama shorts", "double life", "betrayal", "story time", "drama", "shorts", "yummy dramaz", "viral", "emotional", "true crime", "relationship drama"],
                 "hashtags": ["#YummyDramaz", "#Shorts", "#Drama", "#DoubleLife", "#Shocking"],
                 "search_keyword": "couple arguing",
@@ -293,31 +303,43 @@ Return ONLY valid JSON:
                 "category_id": "24"
             },
             {
-                "title": "Dark Psychology: How Toxic People Control You 🧠 #Shorts",
-                "hook": "If someone does THIS to you — run. They are using your emotions as a weapon.",
-                "script": "If someone does THIS to you — run immediately. They are using your emotions as a weapon. Toxic people use a technique called \"intermittent reinforcement\" — they hurt you, then love bomb you. Hot and cold. Push and pull. Your brain becomes addicted to their approval like a drug. They control your self-worth until you cannot imagine life without their validation. This is not love. This is manipulation. Have you experienced this?",
-                "description": "Dark psychology tactics that toxic and narcissistic people use to control and manipulate those around them. Awareness is your protection. #YummyDramaz #Shorts #Psychology #Manipulation #DarkPsychology",
+                "title": "Dark Psychology: How Toxic People Hook You 🧠 #Shorts",
+                "hook": "If someone does this to you, run immediately. They are weaponizing your emotions.",
+                "dialogues": [
+                    {"speaker": "narrator", "text": "If someone does this to you, run immediately. They are weaponizing your emotions."},
+                    {"speaker": "male", "text": "You're crazy! I never said that. You're imagining things again."},
+                    {"speaker": "female", "text": "Why do you always make me feel like I am losing my mind?"},
+                    {"speaker": "narrator", "text": "This psychological tactic is called intermittent reinforcement. They break you down, then love-bomb you."},
+                    {"speaker": "narrator", "text": "Your brain gets addicted to their validation like a drug. Have you ever experienced this?"}
+                ],
+                "description": "Dark psychology tactics that toxic and narcissistic people use to control and manipulate those around them. #YummyDramaz #Shorts #Psychology #Manipulation #DarkPsychology",
                 "tags": ["dark psychology", "toxic relationship", "narcissist", "manipulation tactics", "psychology shorts", "drama", "shorts", "yummy dramaz", "mental health", "toxic people", "red flags", "self improvement"],
                 "hashtags": ["#YummyDramaz", "#Shorts", "#DarkPsychology", "#Manipulation", "#ToxicRelationship"],
-                "search_keyword": "dark room",
+                "search_keyword": "dark room shadow",
                 "thumbnail_text": "THEY CONTROL YOU 🧠",
                 "category": "Psychology",
                 "category_id": "24"
             },
             {
-                "title": "She Waited 10 Years To Destroy Him 😤 Revenge Story #Shorts",
-                "hook": "She smiled at her ex at the party. He had no idea she had been planning this for a decade.",
-                "script": "She smiled at her ex at the party. He had no idea she had been planning this for a decade. Ten years ago he humiliated her publicly, took her savings, and left her with nothing. She rebuilt herself — quietly, methodically. She bought the company he worked for. And on a Monday morning, she sat in the CEO chair and called him into her office. He went pale. She simply said — you're fired. Revenge is a dish best served cold.",
-                "description": "A story of patience, rebuilding, and ultimate revenge that proves karma always comes back around. #YummyDramaz #Shorts #Revenge #Drama #Story",
+                "title": "She Waited 10 Years For This Revenge 😤 #Shorts",
+                "hook": "She smiled at her arrogant ex in the boardroom. He had no idea she owned the building.",
+                "dialogues": [
+                    {"speaker": "narrator", "text": "She smiled at her arrogant ex in the boardroom. He had no clue she owned the entire company."},
+                    {"speaker": "male", "text": "What are you doing in the CEO seat? Get out before security removes you!"},
+                    {"speaker": "female", "text": "Ten years ago, you stole my life savings and left me with nothing."},
+                    {"speaker": "narrator", "text": "She slid the termination contract across the polished marble desk."},
+                    {"speaker": "female", "text": "Today, I sign your termination letter. Security is already behind you."},
+                    {"speaker": "narrator", "text": "Revenge is a dish best served cold. Like and subscribe for more drama!"}
+                ],
+                "description": "A story of patience, quiet rebuilding, and ultimate poetic justice. #YummyDramaz #Shorts #Revenge #Drama #Story",
                 "tags": ["revenge story", "drama shorts", "karma story", "shocking ending", "story time", "drama", "shorts", "yummy dramaz", "viral story", "emotional", "revenge", "satisfying"],
                 "hashtags": ["#YummyDramaz", "#Shorts", "#Revenge", "#Drama", "#KarmaStory"],
-                "search_keyword": "luxury office",
+                "search_keyword": "luxury office building",
                 "thumbnail_text": "10 YEAR REVENGE 😤",
                 "category": "Revenge",
                 "category_id": "24"
-            },
+            }
         ]
-
         selected = random.choice(pool)
         return self._enrich_metadata(selected.copy(), topic)
 

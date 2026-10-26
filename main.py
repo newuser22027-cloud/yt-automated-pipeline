@@ -80,18 +80,19 @@ def execute_pipeline(
             output_filename="voiceover.mp3"
         )
 
-    # ── Step 3: Stock Footage ─────────────────────────────────────────────────
-    logger.info(f"[3/5] 🎬 Fetching HD footage for: '{content['search_keyword']}'...")
-    video_stock_path = None
+    # ── Step 3: Stock Footage (Multi-Scene Cuts) ──────────────────────────────
+    logger.info(f"[3/5] 🎬 Fetching multi-scene HD footage for: '{content['search_keyword']}'...")
+    video_stock_paths = []
     for attempt in range(1, max_retries + 1):
         try:
-            video_stock_path = media_fetch.fetch_video(keyword=content["search_keyword"])
-            if video_stock_path and video_stock_path.exists():
+            video_stock_paths = media_fetch.fetch_multiple_videos(keyword=content["search_keyword"], count=4)
+            if video_stock_paths:
                 break
         except Exception as e:
             logger.warning(f"   Media fetch attempt {attempt} failed: {e}")
             if attempt == max_retries:
-                raise
+                # Fallback to single video
+                video_stock_paths = [media_fetch.fetch_video(keyword=content["search_keyword"])]
 
     # ── Step 4: Video Render ──────────────────────────────────────────────────
     logger.info("[4/5] ⚙️  Rendering premium 1080x1920 drama short...")
@@ -100,7 +101,7 @@ def execute_pipeline(
         try:
             renderer.render(
                 audio_path=audio_path,
-                video_path=video_stock_path,
+                video_path=video_stock_paths,
                 title_text=content.get("title", "YUMMY DRAMAZ"),
                 script_text=content["script"],
                 hook_text=content.get("hook"),

@@ -149,12 +149,9 @@ class VideoRenderer:
                 logger.warning(f"Composite audio failed: {e}. Using voice track.")
                 combined_audio = voice_clip
 
-            # ── 3. BACKGROUND FOOTAGE ────────────────────────────────────────
-            video_clip = VideoFileClip(str(video_path))
-            video_clip = (_loop_clip(video_clip, target_duration)
-                          if video_clip.duration < target_duration
-                          else _clip_subclip(video_clip, 0, target_duration))
-            video_clip = self._fit_vertical(video_clip)
+            # ── 3. BACKGROUND FOOTAGE (MULTI-SCENE MONTAGE) ─────────────────
+            raw_video_paths = video_path if isinstance(video_path, list) else [video_path]
+            video_clip = self._build_multi_scene_clip(raw_video_paths, target_duration)
             video_clip = _clip_with_audio(video_clip, combined_audio)
 
             layers = [video_clip]
@@ -305,6 +302,50 @@ class VideoRenderer:
                 logger.warning(f"Climax SFX error: {e}")
 
         return sfx_clips
+
+    def _build_multi_scene_clip(self, video_paths: list, target_duration: float) -> VideoFileClip:
+        """
+        Assembles multiple video footage clips into a dynamic, fast-cut sequence
+        (cuts every 3.5 to 5.0 seconds) for maximum viewer retention.
+        """
+        valid_paths = [Path(p) for p in video_paths if Path(p).exists()]
+        if not valid_paths:
+            raise FileNotFoundError("No valid video stock footage provided to render.")
+
+        scene_clips = []
+        try:
+            # Determine cut length per scene (aim for ~3.5 to 4.5s per cut)
+            scene_duration = 4.0
+            num_cuts = max(1, math.ceil(target_duration / scene_duration))
+            time_per_cut = target_duration / num_cuts
+
+            current_time = 0.0
+            for i in range(num_cuts):
+                p = valid_paths[i % len(valid_paths)]
+                v_clip = VideoFileClip(str(p))
+                fitted = self._fit_vertical(v_clip)
+
+                cut_len = min(time_per_cut, target_duration - current_time)
+                # Take snippet from middle of footage to avoid static intro frames
+                start_offset = 1.0 if fitted.duration > (cut_len + 1.5) else 0.0
+                end_offset = min(start_offset + cut_len, fitted.duration)
+                
+                cut = _clip_subclip(fitted, start_offset, end_offset)
+                cut = _clip_with_duration(cut, cut_len)
+                scene_clips.append(cut)
+                current_time += cut_len
+                if current_time >= target_duration:
+                    break
+
+            logger.info(f"🎞️ Assembled {len(scene_clips)} dynamic scene cuts (avg {time_per_cut:.1f}s each)")
+            final_montage = concatenate_videoclips(scene_clips, method="compose")
+            return _clip_with_duration(final_montage, target_duration)
+
+        except Exception as e:
+            logger.warning(f"Multi-scene montage failed: {e}. Falling back to single loop.")
+            single = VideoFileClip(str(valid_paths[0]))
+            single = _loop_clip(single, target_duration)
+            return self._fit_vertical(single)
 
     def _fit_vertical(self, clip) -> VideoFileClip:
         """Smart centre-crop to 1080x1920."""

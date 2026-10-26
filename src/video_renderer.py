@@ -122,19 +122,31 @@ class VideoRenderer:
             target_duration = voice_clip.duration
             logger.info(f"Audio duration: {target_duration:.2f}s")
 
-            # ── 2. BACKGROUND MUSIC ──────────────────────────────────────────
+            # ── 2. BACKGROUND MUSIC & SOUND EFFECTS (SFX) ─────────────────
+            audio_tracks = [voice_clip]
+
+            # 2a. Background Music
             music_path = self._ensure_music()
             if music_path:
                 try:
                     music_clip = AudioFileClip(str(music_path))
                     music_clip = _loop_clip(music_clip, target_duration)
                     music_clip = _set_volume(music_clip, 0.10)  # 10% — subtle mood
-                    combined_audio = CompositeAudioClip([voice_clip, music_clip])
+                    audio_tracks.append(music_clip)
                     logger.info("🎵 Background music mixed successfully.")
                 except Exception as e:
                     logger.warning(f"Music mix failed: {e}")
-                    combined_audio = voice_clip
-            else:
+
+            # 2b. Timed Dramatic Sound Effects (Whoosh & Dramatic Hit)
+            sfx_clips = self._generate_sfx_tracks(target_duration)
+            if sfx_clips:
+                audio_tracks.extend(sfx_clips)
+                logger.info(f"🔊 Mixed {len(sfx_clips)} dynamic dramatic SFX hits.")
+
+            try:
+                combined_audio = CompositeAudioClip(audio_tracks)
+            except Exception as e:
+                logger.warning(f"Composite audio failed: {e}. Using voice track.")
                 combined_audio = voice_clip
 
             # ── 3. BACKGROUND FOOTAGE ────────────────────────────────────────
@@ -229,7 +241,70 @@ class VideoRenderer:
                         return music_path
             except Exception as e:
                 logger.warning(f"Music download failed ({url}): {e}")
-        return None
+    def _generate_sfx_tracks(self, total_duration: float) -> list:
+        """
+        Creates perfectly-timed dramatic SFX audio clips:
+        - Hook whoosh at 0.1s
+        - Shock/betrayal dramatic hit at ~3.5s
+        - Mid-story suspense heartbeat/drop
+        """
+        sfx_clips = []
+        sfx_dir = config.base_dir / "assets" / "sfx"
+        sfx_dir.mkdir(parents=True, exist_ok=True)
+
+        whoosh_p = sfx_dir / "whoosh.mp3"
+        hit_p = sfx_dir / "dramatic_hit.mp3"
+        heart_p = sfx_dir / "heartbeat.mp3"
+
+        # Auto download if not present
+        if not whoosh_p.exists() or not hit_p.exists():
+            import requests
+            sfx_map = {
+                whoosh_p: "https://assets.mixkit.co/active_storage/sfx/2874/2874-preview.mp3",
+                hit_p: "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
+                heart_p: "https://assets.mixkit.co/active_storage/sfx/2555/2555-preview.mp3"
+            }
+            for p, url in sfx_map.items():
+                if not p.exists():
+                    try:
+                        r = requests.get(url, timeout=10)
+                        if r.status_code == 200:
+                            p.write_bytes(r.content)
+                    except Exception:
+                        pass
+
+        # 1. Whoosh SFX at start (Hook entrance)
+        if whoosh_p.exists() and whoosh_p.stat().st_size > 1000:
+            try:
+                w_clip = AudioFileClip(str(whoosh_p))
+                w_clip = _set_volume(w_clip, 0.40)
+                w_clip = _clip_with_start(w_clip, 0.1)
+                sfx_clips.append(w_clip)
+            except Exception as e:
+                logger.warning(f"Whoosh SFX error: {e}")
+
+        # 2. Dramatic Hit at 3.5s (Hook impact / tension point)
+        if hit_p.exists() and hit_p.stat().st_size > 1000 and total_duration > 4.0:
+            try:
+                h_clip = AudioFileClip(str(hit_p))
+                h_clip = _set_volume(h_clip, 0.35)
+                h_clip = _clip_with_start(h_clip, 3.4)
+                sfx_clips.append(h_clip)
+            except Exception as e:
+                logger.warning(f"Dramatic hit SFX error: {e}")
+
+        # 3. Second Dramatic Hit at 60% duration (Climax point)
+        if hit_p.exists() and hit_p.stat().st_size > 1000 and total_duration > 12.0:
+            try:
+                climax_time = total_duration * 0.58
+                c_clip = AudioFileClip(str(hit_p))
+                c_clip = _set_volume(c_clip, 0.30)
+                c_clip = _clip_with_start(c_clip, climax_time)
+                sfx_clips.append(c_clip)
+            except Exception as e:
+                logger.warning(f"Climax SFX error: {e}")
+
+        return sfx_clips
 
     def _fit_vertical(self, clip) -> VideoFileClip:
         """Smart centre-crop to 1080x1920."""

@@ -253,6 +253,10 @@ Return ONLY valid JSON matching this schema:
         data.setdefault("category_id", "24")
         data.setdefault("thumbnail_text", data["title"][:30].upper())
         data.setdefault("search_keyword", "drama")
+        data.setdefault("pinned_comment", (
+            f"💬 Who do you think was in the wrong here? Let's settle this in the comments! 👇\n\n"
+            f"🔔 Subscribe to @YummyDramaz for daily drama & revenge stories!"
+        ))
 
         if "shorts" not in [t.lower() for t in data.get("tags", [])]:
             data.setdefault("tags", []).append("shorts")

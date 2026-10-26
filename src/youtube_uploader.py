@@ -135,6 +135,16 @@ class YouTubeUploader:
             except Exception as e:
                 logger.warning(f"Thumbnail set failed (non-critical): {e}")
 
+        # ── Auto-Post Pinned Engagement Comment ────────────────────────────────
+        comment_text = metadata.get("pinned_comment") or (
+            "💬 Who was in the wrong here? Let's settle this in the comments! 👇\n\n"
+            "🔔 Subscribe to @YummyDramaz for daily drama & revenge stories!"
+        )
+        try:
+            self._post_comment(youtube, video_id, comment_text)
+        except Exception as e:
+            logger.warning(f"Auto-comment failed (non-critical): {e}")
+
         return video_id
 
     # ── SEO HELPERS ───────────────────────────────────────────────────────────
@@ -282,6 +292,25 @@ Your daily dose of shocking drama stories, dark psychology, betrayal, love & rev
             media_body=media
         ).execute()
         logger.info(f"✅ Thumbnail set for video: {video_id}")
+
+    def _post_comment(self, youtube, video_id: str, comment_text: str):
+        """Posts an engagement trigger comment on the newly uploaded video."""
+        body = {
+            "snippet": {
+                "videoId": video_id,
+                "topLevelComment": {
+                    "snippet": {
+                        "textOriginal": comment_text
+                    }
+                }
+            }
+        }
+        resp = youtube.commentThreads().insert(
+            part="snippet",
+            body=body
+        ).execute()
+        comment_id = resp.get("id")
+        logger.info(f"💬 Posted engagement comment (ID: {comment_id}) on video {video_id}!")
 
 
 if __name__ == "__main__":

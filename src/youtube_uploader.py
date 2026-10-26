@@ -29,10 +29,9 @@ from utils.logger import logger
 class YouTubeUploader:
     """Manages authenticated uploads with full SEO optimization."""
 
-    # Both scopes: upload + manage (for thumbnail, channel update)
+    # Standard upload scope matching the user's authorized refresh token
     SCOPES = [
-        "https://www.googleapis.com/auth/youtube.upload",
-        "https://www.googleapis.com/auth/youtube",
+        "https://www.googleapis.com/auth/youtube.upload"
     ]
 
     def __init__(self):

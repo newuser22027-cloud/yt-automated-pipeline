@@ -23,11 +23,11 @@ from src.config import config
 from utils.logger import logger
 
 
-# Character Voice Roster (All 100% Free Edge-TTS Neural Voices)
+# Character Voice Roster (Deep Dramatic Thriller Neural Voices)
 VOICE_MAP = {
-    "narrator": "en-US-ChristopherNeural",
-    "male":     "en-US-GuyNeural",
-    "female":   "en-US-JennyNeural"
+    "narrator": "en-US-ChristopherNeural",  # Deep, suspenseful cinema baritone
+    "male":     "en-US-EricNeural",         # Intense, dramatic male
+    "female":   "en-US-AriaNeural"          # Emotional, expressive high-tension female
 }
 
 
@@ -47,15 +47,30 @@ class AudioGenerator:
         text = re.sub(r'\([^)]*\)', '', text)
         return text.strip()
 
-    async def _synthesize_line(self, text: str, voice: str, output_path: Path, rate: str = "+12%"):
-        """Synthesizes a single dialogue line."""
+    async def _synthesize_line(self, text: str, voice: str, output_path: Path):
+        """Synthesizes a single dialogue line with custom emotion tuning."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Dynamic pitch and rate based on character role
+        if "Christopher" in voice:
+            # Narrator: deeper, deliberate, cinematic tension (-3Hz, +8% speed)
+            rate_val = "+8%"
+            pitch_val = "-3Hz"
+        elif "Aria" in voice:
+            # Female high-emotion: faster, urgent, intense (+14% speed, +2Hz)
+            rate_val = "+14%"
+            pitch_val = "+2Hz"
+        else:
+            # Male confrontational: punchy, direct (+12% speed, -1Hz)
+            rate_val = "+12%"
+            pitch_val = "-1Hz"
+
         communicate = edge_tts.Communicate(
             text=text,
             voice=voice,
-            rate=rate,
-            pitch="+3Hz",
-            volume="+8%"
+            rate=rate_val,
+            pitch=pitch_val,
+            volume="+12%"
         )
         await communicate.save(str(output_path))
 

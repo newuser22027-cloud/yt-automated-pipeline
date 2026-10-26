@@ -334,12 +334,25 @@ class VideoRenderer:
                 
                 cut = _clip_subclip(fitted, start_offset, end_offset)
                 cut = _clip_with_duration(cut, cut_len)
+
+                # High-retention zoom punch: alternate between slight 1.08x punch-in for tension
+                if i % 2 == 1:
+                    try:
+                        zoomed_w = int(self.TARGET_WIDTH * 1.08)
+                        zoomed_h = int(self.TARGET_HEIGHT * 1.08)
+                        z_clip = _clip_resize(cut, width=zoomed_w, height=zoomed_h)
+                        zx1 = (zoomed_w - self.TARGET_WIDTH) // 2
+                        zy1 = (zoomed_h - self.TARGET_HEIGHT) // 2
+                        cut = _clip_crop(z_clip, zx1, zy1, zx1 + self.TARGET_WIDTH, zy1 + self.TARGET_HEIGHT)
+                    except Exception:
+                        pass
+
                 scene_clips.append(cut)
                 current_time += cut_len
                 if current_time >= target_duration:
                     break
 
-            logger.info(f"🎞️ Assembled {len(scene_clips)} dynamic scene cuts (avg {time_per_cut:.1f}s each)")
+            logger.info(f"🎞️ Assembled {len(scene_clips)} dynamic scene cuts with punch-zoom (avg {time_per_cut:.1f}s each)")
             final_montage = concatenate_videoclips(scene_clips, method="compose")
             return _clip_with_duration(final_montage, target_duration)
 
@@ -418,17 +431,57 @@ class VideoRenderer:
             return None
 
     def _create_header_pill(self, title: str) -> Optional[Path]:
-        """Channel name pill at top."""
+        """
+        Creates a sleek modern glassmorphism top header pill.
+        Auto-wraps long sentences so title text is NEVER cut off.
+        """
         try:
-            w, h = 700, 90
-            img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+            # Clean title
+            import re
+            clean_title = re.sub(r'#\w+', '', title).strip()  # remove hashtags
+            clean_title = re.sub(r'\s+', ' ', clean_title)
+
+            # Auto-wrap words
+            words = clean_title.split()
+            lines = []
+            cur_line = []
+            for w in words:
+                cur_line.append(w)
+                if len(" ".join(cur_line)) > 28:
+                    lines.append(" ".join(cur_line))
+                    cur_line = []
+            if cur_line:
+                lines.append(" ".join(cur_line))
+
+            lines = lines[:2]  # Max 2 lines for clean top banner
+            line_height = 42
+            pill_w = 940
+            pill_h = 75 + (len(lines) - 1) * line_height
+
+            img = Image.new("RGBA", (pill_w, pill_h), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
-            draw.rounded_rectangle([(0, 0), (w, h)], radius=45,
-                                   fill=(15, 15, 15, 220), outline=(255, 180, 0, 255), width=3)
-            font = self._get_font(34)
-            txt = ("🎬 " + title.upper())[:36]
-            draw.text((w // 2, h // 2), txt, font=font,
-                      fill=(255, 230, 0, 255), anchor="mm")
+
+            # Modern sleek translucent glass pill
+            draw.rounded_rectangle(
+                [(0, 0), (pill_w, pill_h)],
+                radius=min(38, pill_h // 2),
+                fill=(12, 12, 18, 210),
+                outline=(255, 215, 0, 220),
+                width=2
+            )
+
+            font = self._get_font(28)
+
+            start_y = 38 if len(lines) == 1 else 30
+            for i, line_str in enumerate(lines):
+                y_coord = start_y + (i * line_height)
+                # Text drop-shadow
+                draw.text((pill_w // 2 + 1, y_coord + 1), line_str.upper(), font=font,
+                          fill=(0, 0, 0, 240), anchor="mm")
+                # Main crisp gold-accented text
+                draw.text((pill_w // 2, y_coord), line_str.upper(), font=font,
+                          fill=(255, 235, 100, 255), anchor="mm")
+
             p = config.temp_dir / "header_pill.png"
             img.save(p, "PNG")
             return p
@@ -437,25 +490,34 @@ class VideoRenderer:
             return None
 
     def _create_subscribe_banner(self, total_duration: float) -> Optional[ImageClip]:
-        """Subscribe CTA shown in last 2 seconds."""
+        """Modern, sleek translucent glass Subscribe overlay for ending."""
         try:
             if total_duration < 4:
                 return None
             start = total_duration - 2.2
-            w, h = 900, 100
+            w, h = 820, 84
             img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
-            draw.rounded_rectangle([(0, 0), (w, h)], radius=50,
-                                   fill=(220, 0, 0, 230), outline=(255, 255, 255, 200), width=2)
-            font = self._get_font(36)
-            draw.text((w // 2, h // 2), "🔔 SUBSCRIBE FOR MORE DRAMA!", font=font,
+
+            # Modern sleek dark glass with crimson glow border
+            draw.rounded_rectangle(
+                [(0, 0), (w, h)],
+                radius=42,
+                fill=(10, 10, 15, 205),
+                outline=(255, 45, 85, 240),
+                width=2
+            )
+
+            font = self._get_font(32)
+            draw.text((w // 2, h // 2), "🔔 SUBSCRIBE FOR NEXT EPISODE", font=font,
                       fill=(255, 255, 255, 255), anchor="mm")
+
             tmp = config.temp_dir / "subscribe_banner.png"
             img.save(tmp, "PNG")
             sc = ImageClip(str(tmp))
             sc = _clip_with_duration(sc, 2.0)
             sc = _clip_with_start(sc, start)
-            sc = _clip_with_position(sc, ("center", 1750))
+            sc = _clip_with_position(sc, ("center", 1720))
             return sc
         except Exception as e:
             logger.warning(f"Subscribe banner error: {e}")
@@ -463,19 +525,19 @@ class VideoRenderer:
 
     def _generate_caption_clips(self, script: str, total_duration: float) -> List[ImageClip]:
         """
-        Premium animated word-by-word captions:
-        - Small groups (2-3 words) for punchy drama pacing
-        - Alternating eye-catching colors
-        - Glow + drop shadow behind text
-        - Slight vertical bounce per caption (alternating Y offset)
+        Alex Hormozi Viral Style Captions:
+        - 1 to 2 words per pop (ultra fast, high retention)
+        - Active word highlighted in bright neon yellow/lime with thick dark border
+        - Contextual emoji popup on trigger words
+        - Positioned in optimal lower-third (y=1280) so footage is never blocked
         """
         clips = []
-        # Split into small punchy chunks of 2-3 words
         words = script.strip().split()
         if not words:
             return clips
 
-        chunk_size = 3
+        # Group words into 1-2 words chunks for fast Hormozi rhythm
+        chunk_size = 2
         chunks = [" ".join(words[i:i + chunk_size]) for i in range(0, len(words), chunk_size)]
         total_words = len(words)
 
@@ -483,60 +545,64 @@ class VideoRenderer:
         caption_dir.mkdir(parents=True, exist_ok=True)
 
         current_time = 0.0
-        font_large = self._get_font(62)   # Main caption font (smaller than before = 62 not 90+)
-        font_small = self._get_font(52)
+        font_main = self._get_font(68)
+
+        # Contextual emotional emojis for drama
+        EMOJI_KEYWORDS = {
+            "SECRET": "🤫", "FAMILY": "👨‍👩‍👧", "WIFE": "👰", "HUSBAND": "💍",
+            "DIVORCE": "💔", "PAPERS": "📄", "LIES": "🤥", "PHONE": "📱",
+            "MONEY": "💰", "REVENGE": "🔥", "DEAD": "💀", "WRONG": "❌",
+            "MIDNIGHT": "🌙", "NOTHING": "🚫", "SECURITY": "👮", "COLD": "❄️"
+        }
 
         for idx, chunk in enumerate(chunks):
             n_words = len(chunk.split())
-            chunk_duration = max(0.35, total_duration * (n_words / total_words))
+            chunk_duration = max(0.28, total_duration * (n_words / total_words))
 
-            color = CAPTION_PALETTE[idx % len(CAPTION_PALETTE)]
-            text  = chunk.upper()
+            text = chunk.upper()
+            # Detect if any trigger word gets an emoji
+            emoji_tag = ""
+            for kw, em in EMOJI_KEYWORDS.items():
+                if kw in text:
+                    emoji_tag = f" {em}"
+                    break
 
-            img_w, img_h = 1000, 220
+            display_text = f"{text}{emoji_tag}"
+
+            # Hormozi signature color cycle: Neon Yellow -> Electric Green -> Bright Cyan
+            colors = [(255, 235, 59), (57, 255, 20), (0, 229, 255), (255, 82, 82)]
+            highlight_color = colors[idx % len(colors)]
+
+            img_w, img_h = 920, 180
             img = Image.new("RGBA", (img_w, img_h), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
 
             cx, cy = img_w // 2, img_h // 2
 
-            # ── Glow layer ────────────────────────────────────────────────────
-            for r in range(12, 0, -3):
-                alpha = int(60 * (r / 12))
-                for dx in range(-r, r + 1, r):
-                    for dy in range(-r, r + 1, r):
-                        draw.text((cx + dx, cy + dy), text, font=font_large,
-                                  fill=(*color[:3], alpha), anchor="mm", align="center")
-
-            # ── Heavy black stroke (outline) ──────────────────────────────────
-            stroke = 6
+            # Deep black outline stroke (8px) for razor-sharp legibility over any footage
+            stroke = 7
             for dx in range(-stroke, stroke + 1):
                 for dy in range(-stroke, stroke + 1):
                     if dx == 0 and dy == 0:
                         continue
-                    draw.text((cx + dx, cy + dy), text, font=font_large,
+                    draw.text((cx + dx, cy + dy), display_text, font=font_main,
                               fill=(0, 0, 0, 255), anchor="mm", align="center")
 
-            # ── Main text ─────────────────────────────────────────────────────
-            draw.text((cx, cy), text, font=font_large,
-                      fill=(*color[:3], 255), anchor="mm", align="center")
-
-            # Slight Gaussian blur on glow only — apply to a copy then composite
-            # (PIL doesn't support layer blending so we just use the drawn result)
+            # Main highlighted pop text
+            draw.text((cx, cy), display_text, font=font_main,
+                      fill=(*highlight_color, 255), anchor="mm", align="center")
 
             caption_file = caption_dir / f"cap_{idx:04d}.png"
             img.save(caption_file, "PNG")
 
-            # Alternate vertical position: creates subtle "bounce" feel
-            y_pos = 1350 if idx % 2 == 0 else 1380
-
+            # Lower-third sweet spot (y=1260), avoids blocking faces
             c = ImageClip(str(caption_file))
             c = _clip_with_duration(c, chunk_duration)
             c = _clip_with_start(c, current_time)
-            c = _clip_with_position(c, ("center", y_pos))
+            c = _clip_with_position(c, ("center", 1260))
             clips.append(c)
 
             current_time += chunk_duration
-
         return clips
 
     def _get_font(self, size: int) -> ImageFont.FreeTypeFont:

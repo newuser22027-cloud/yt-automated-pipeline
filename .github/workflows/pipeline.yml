@@ -2,8 +2,15 @@ name: YouTube Automated Content Pipeline
 
 on:
   schedule:
-    # Triggers daily at 12:00 UTC (adjust to your preferred audience peak time)
+    # 4 Daily High-CPM Tier-1 Peak Upload Slots:
+    # 1. 12:00 UTC (8:00 AM EST - US Morning Peak / 5:00 PM PKT)
+    # 2. 16:00 UTC (12:00 PM EST - US Lunch Rush / 9:00 PM PKT)
+    # 3. 20:00 UTC (4:00 PM EST - US Afternoon Peak / 1:00 AM PKT)
+    # 4. 00:00 UTC (8:00 PM EST - US Prime Time Evening / 5:00 AM PKT)
     - cron: '0 12 * * *'
+    - cron: '0 16 * * *'
+    - cron: '0 20 * * *'
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       dry_run:

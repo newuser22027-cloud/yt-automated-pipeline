@@ -1,8 +1,9 @@
 """
-Content Generator Module — UPGRADED v3.1 (Multi-Voice Acting Edition)
-- Generates structured drama dialogues with Speaker tags (Narrator, Male, Female)
-- Strong hook-first script structure for Yummy Dramaz
-- Full SEO metadata & YouTube Analytics awareness
+Content Generator Module — UPGRADED v5.0 (Animals & Wildlife Facts Edition)
+- Focus: Mind-Blowing Animal Facts, Wildlife Survival, Predators & Rare Abilities
+- High Retention Hooks & Emotional Storytelling for Animal lovers worldwide
+- Full SEO metadata for Tier-1 audience (US, UK, CA, AU)
+- Auto-Pinned engagement debate comment
 """
 
 import os
@@ -16,32 +17,34 @@ from src.config import config
 from utils.logger import logger
 
 
-CHANNEL_NICHE = "drama-stories"
+CHANNEL_NICHE = "animal-facts"
 
-DRAMA_TOPICS = [
-    "a shocking betrayal that changed a family forever",
-    "a love story that ended in tragedy no one saw coming",
-    "the darkest secret hidden inside a rich family",
-    "a woman who discovered her husband's double life",
-    "the forbidden romance that destroyed two families",
-    "a psychological thriller story about obsession and revenge",
-    "a true crime story that shocked the entire city",
-    "the twisted mind games inside a toxic relationship",
-    "a mother who found out her child was not hers",
-    "the millionaire who lost everything because of one mistake",
-    "a story of betrayal between best friends",
-    "the secret affair that no one was supposed to know about",
-    "a girl who uncovered a dark conspiracy in her own home",
-    "the husband who disappeared on their wedding night",
-    "a revenge story that took 10 years to complete",
-    "dark psychology tricks used to manipulate your partner",
-    "the wife who planned the perfect revenge",
-    "a story about greed, power, and ultimate downfall",
+ANIMAL_TOPICS = [
+    "the immortal jellyfish that can reset its biological age forever",
+    "why the honey badger is biologically feared by lions and venomous snakes",
+    "the terrifying hunting strategy of the pistol shrimp that boils water",
+    "how the peregrine falcon reaches speeds over 240 miles per hour",
+    "the unbelievable intelligence of the octopus with nine brains and three hearts",
+    "the electric eel that discharges 860 volts of pure electricity",
+    "why the mantis shrimp punches with the acceleration of a gunshot",
+    "how the tardigrade can survive the cold vacuum of outer space",
+    "the deadly poison dart frog with enough venom to kill 10 grown men",
+    "the secret language that killer whales use to hunt great white sharks",
+    "why the crocodile has remained unchanged for 200 million years",
+    "the bizarre defense mechanism of the horned lizard shooting blood from its eyes",
+    "the massive blue whale whose heart is the size of a car",
+    "how the golden eagle throws mountain goats off cliffs to hunt",
+    "the black mamba whose venom can shut down an adult human in 20 minutes",
+    "the wood frog that freezes 70 percent of its body solid in winter and comes back to life",
+    "the bullet ant whose single sting feels like being shot by a pistol",
+    "how army ants construct living bridges out of their own bodies",
+    "the axolotl that can regenerate its entire brain, heart, and limbs",
+    "the deep sea anglerfish that thrives under crushing oceanic pressure"
 ]
 
 
 class ContentGenerator:
-    """Handles script generation with multi-character acting dialogues and SEO."""
+    """Handles viral animal facts script generation with SEO and engagement hooks."""
 
     def __init__(self, openai_key: Optional[str] = None, gemini_key: Optional[str] = None):
         self.openai_key = openai_key or config.openai_api_key
@@ -49,27 +52,25 @@ class ContentGenerator:
         self._used_topics_cache: List[str] = []
 
     def generate(self, niche: str = None) -> Dict[str, Any]:
-        """
-        Generates complete video package with multi-voice dialogues.
-        """
+        """Generates complete viral animal facts video package."""
         topic = self._pick_smart_topic(niche)
-        logger.info(f"Generating multi-voice content for topic: '{topic}'")
+        logger.info(f"Generating viral animal fact for: '{topic}'")
 
-        prompt = self._build_drama_prompt(topic)
+        prompt = self._build_animal_prompt(topic)
 
-        # Try Gemini free tier first
+        # 1. Try Gemini free tier first
         if self.gemini_key and len(self.gemini_key) > 20:
             try:
-                logger.info("Attempting via Google Gemini API (Free Multi-Voice)...")
+                logger.info("Attempting via Google Gemini API (Free Animal Facts)...")
                 data = self._generate_gemini(prompt)
                 if data and self._validate_content(data):
                     data = self._enrich_metadata(data, topic)
-                    logger.info(f"✅ Gemini generated: '{data['title']}' with {len(data.get('dialogues', []))} lines")
+                    logger.info(f"✅ Gemini generated: '{data['title']}'")
                     return data
             except Exception as e:
                 logger.warning(f"Gemini error: {e}")
 
-        # Try OpenAI if available
+        # 2. Try OpenAI if available
         if self.openai_key and "sk-proj-xxxx" not in self.openai_key:
             try:
                 from openai import OpenAI
@@ -79,10 +80,10 @@ class ContentGenerator:
                     model="gpt-4o-mini",
                     response_format={"type": "json_object"},
                     messages=[
-                        {"role": "system", "content": "You are a viral YouTube Shorts script writer specialized in multi-character dramatic acting scripts. Output only valid JSON."},
+                        {"role": "system", "content": "You are a National Geographic style viral YouTube Shorts creator specializing in mind-blowing animal facts. Output strictly JSON."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.82,
+                    temperature=0.75,
                     max_tokens=800
                 )
                 data = json.loads(response.choices[0].message.content)
@@ -93,8 +94,8 @@ class ContentGenerator:
             except Exception as e:
                 logger.warning(f"OpenAI error: {e}")
 
-        # Curated fallback
-        logger.warning("Using curated multi-voice drama content pool.")
+        # 3. Curated High-Retention Fallback
+        logger.warning("Using curated animal facts content pool.")
         return self._generate_fallback(topic)
 
     def get_analytics_summary(self) -> Dict[str, Any]:
@@ -113,22 +114,27 @@ class ContentGenerator:
                 token_uri=creds_info.get("token_uri", "https://oauth2.googleapis.com/token"),
                 client_id=creds_info.get("client_id"),
                 client_secret=creds_info.get("client_secret"),
-                scopes=["https://www.googleapis.com/auth/youtube.readonly"]
+                scopes=["https://www.googleapis.com/auth/youtube.upload"]
             )
             creds.refresh(Request())
             youtube = build("youtube", "v3", credentials=creds)
 
-            search_resp = youtube.search().list(
+            # Search channel uploads
+            channel_resp = youtube.channels().list(part="contentDetails", mine=True).execute()
+            items = channel_resp.get("items", [])
+            if not items:
+                return {"recent_titles": []}
+
+            uploads_list_id = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+            playlist_resp = youtube.playlistItems().list(
                 part="snippet",
-                forMine=True,
-                type="video",
-                maxResults=10,
-                order="date"
+                playlistId=uploads_list_id,
+                maxResults=10
             ).execute()
 
             recent_titles = [
                 item["snippet"]["title"]
-                for item in search_resp.get("items", [])
+                for item in playlist_resp.get("items", [])
             ]
             self._used_topics_cache = recent_titles
             logger.info(f"📊 Analytics: found {len(recent_titles)} recent videos.")
@@ -139,7 +145,7 @@ class ContentGenerator:
             return {"recent_titles": []}
 
     def _pick_smart_topic(self, niche_override: str = None) -> str:
-        """Picks a topic not recently used."""
+        """Picks an animal topic not recently used."""
         if niche_override:
             return niche_override
 
@@ -147,7 +153,7 @@ class ContentGenerator:
         recent_titles = [t.lower() for t in analytics.get("recent_titles", [])]
 
         available = []
-        for topic in DRAMA_TOPICS:
+        for topic in ANIMAL_TOPICS:
             topic_words = set(topic.lower().split())
             is_too_similar = any(
                 len(topic_words & set(rt.split())) >= 2
@@ -157,54 +163,44 @@ class ContentGenerator:
                 available.append(topic)
 
         if not available:
-            available = DRAMA_TOPICS
+            available = ANIMAL_TOPICS
 
         return random.choice(available)
 
-    def _build_drama_prompt(self, topic: str) -> str:
-        """Builds a multi-character dialogue prompt."""
+    def _build_animal_prompt(self, topic: str) -> str:
+        """Builds a high-retention animal facts prompt."""
         return f"""
-You are a top-tier viral YouTube Shorts drama producer for the channel "Yummy Dramaz".
-Target Audience: US, UK, Canada, Australia (High-CPM viewers).
+You are a viral YouTube Shorts creator and wildlife documentary narrator.
+Target Audience: US, UK, Canada, Australia (High-CPM viewers who love wild animals and nature).
 Topic: "{topic}"
 
-Generate an intense 35-45 second dramatic short script structured as a realistic multi-character scene.
-Characters can be:
-- "narrator" (suspenseful narrator setting up the scene and emotional reactions)
-- "male" (husband, boyfriend, detective, ex, or brother)
-- "female" (wife, girlfriend, sister, or mother)
+Generate an intense 30-40 second factual script that hooks viewers instantly and keeps them mesmerized.
 
 STRICT RULES:
-1. "hook": First 2-3 sentences. Shocking, high curiosity, instant tension.
-2. "dialogues": Array of 4 to 6 dialogue turns. Each turn has:
-   - "speaker": exactly "narrator", "male", or "female"
-   - "text": the exact words spoken (punchy, emotional, realistic, no long monologues)
-3. "script": Full concatenated spoken text of all dialogues combined (75-95 words).
-4. "title": Ultra-clickbait, high CTR, emotional under 90 chars + emojis + #Shorts.
-5. "description": 2-3 emotional sentences + call to action + 5 hashtags.
-6. "tags": Exactly 12 high-search drama tags.
-7. "search_keyword": 1-2 words visual search term (e.g. "couple arguing", "luxury mansion", "crying woman").
-8. "thumbnail_text": 3-5 word bold emotional text (e.g. "HE HAD TWO WIVES 😱").
-9. "category": "Drama" or "Psychology" or "Revenge".
-10. "hashtags": Array of 5 hashtags including #YummyDramaz and #Shorts.
+1. "hook": First 2 sentences ONLY. Must be SHOCKING and impossible to scroll away from. 
+   Examples: "This creature literally refuses to die.", "Scientists still cannot explain how this predator survives."
+2. "script": Fast-paced, intense 70-85 words. No filler greetings ("Hey guys"). Immediate facts, jaw-dropping numbers, and an interactive question at the end.
+3. "title": Ultra-clickbait, high CTR under 85 characters with emojis and #Shorts. (e.g. "The Creature That Literally Refuses To Die 🤯 #Shorts")
+4. "description": 2-3 fascinating sentences + call to action + 5 hashtags.
+5. "tags": Exactly 15 high-search animal tags (e.g. "animals", "wildlife", "animal facts", "nature", "predators", "shorts", "dangerous animals").
+6. "search_keyword": 1-2 words specific animal visual search term (e.g. "lion", "octopus", "falcon", "snake", "eagle", "tiger").
+7. "thumbnail_text": 3-4 word punchy bold text (e.g. "IT CANNOT DIE 🤯").
+8. "category": "Animals" or "Nature" or "Wild Predators".
+9. "hashtags": 5 viral hashtags including #AnimalFacts #WildLife #Shorts #Nature.
+10. "pinned_comment": An engaging debate question that compels viewers to comment (e.g. "Would you survive 1 hour in a room with this creature? Tell us below! 👇").
 
 Return ONLY valid JSON matching this schema:
 {{
   "title": "string",
   "hook": "string",
-  "dialogues": [
-    {{"speaker": "narrator", "text": "Nobody warned her. She grabbed his phone..."}},
-    {{"speaker": "male", "text": "Why are you touching my phone? Put it back!"}},
-    {{"speaker": "female", "text": "Who is Karen? And why are there photos of three kids?"}},
-    {{"speaker": "narrator", "text": "His face went pale. The marriage was over."}}
-  ],
   "script": "string",
   "description": "string",
   "tags": ["tag1", "tag2"],
   "hashtags": ["#tag1", "#tag2"],
   "search_keyword": "string",
   "thumbnail_text": "string",
-  "category": "string"
+  "category": "string",
+  "pinned_comment": "string"
 }}
 """
 
@@ -225,37 +221,28 @@ Return ONLY valid JSON matching this schema:
         return all(k in data for k in ["title", "script", "description", "tags"])
 
     def _enrich_metadata(self, data: Dict, topic: str) -> Dict:
-        """Enriches metadata and ensures valid dialogues array."""
-        # Ensure dialogues exist
-        if "dialogues" not in data or not isinstance(data["dialogues"], list) or len(data["dialogues"]) == 0:
-            # Fallback construct dialogues from script
-            script = data.get("script", "")
-            data["dialogues"] = [
-                {"speaker": "narrator", "text": script}
-            ]
-
-        # Re-derive clean concatenated script from dialogues
-        data["script"] = " ".join([d.get("text", "").strip() for d in data["dialogues"] if d.get("text")])
-
+        """Enriches metadata and appends wildlife channel branding."""
         if "hashtags" not in data:
-            data["hashtags"] = ["#YummyDramaz", "#Shorts", "#Drama", "#Story", "#Viral"]
+            data["hashtags"] = ["#AnimalFacts", "#WildLife", "#Nature", "#Shorts", "#Predators"]
 
         hashtag_str = " ".join(data["hashtags"])
         if hashtag_str not in data["description"]:
             data["description"] = data["description"].strip() + f"\n\n{hashtag_str}"
 
         data["description"] += (
-            "\n\n🔔 Subscribe to Yummy Dramaz for daily shocking drama stories!"
-            "\n💬 Comment your reaction below!"
-            "\n❤️ Like if this story shocked you!"
+            "\n\n🐾 Welcome to Wild Discoveries!"
+            "\n🔔 Subscribe for daily mind-blowing animal facts and wildlife mysteries!"
+            "\n💬 Comment below what animal we should cover next!"
+            "\n❤️ Like if this animal shocked you!"
         )
 
-        data.setdefault("category_id", "24")
-        data.setdefault("thumbnail_text", data["title"][:30].upper())
-        data.setdefault("search_keyword", "drama")
+        data.setdefault("category_id", "15")  # 15 = Pets & Animals on YouTube
+        data.setdefault("thumbnail_text", data["title"][:25].upper())
+        data.setdefault("search_keyword", "wildlife animal")
+
         data.setdefault("pinned_comment", (
-            f"💬 Who do you think was in the wrong here? Let's settle this in the comments! 👇\n\n"
-            f"🔔 Subscribe to @YummyDramaz for daily drama & revenge stories!"
+            f"🐾 What do you think is the most terrifying animal on Earth? Let us know below! 👇\n\n"
+            f"🔔 Subscribe for daily mind-blowing animal facts!"
         ))
 
         if "shorts" not in [t.lower() for t in data.get("tags", [])]:
@@ -266,82 +253,59 @@ Return ONLY valid JSON matching this schema:
         return data
 
     def _generate_fallback(self, topic: str) -> Dict[str, Any]:
-        """Multi-character dramatic fallback pool."""
+        """Curated high-retention animal facts fallback pool."""
         pool = [
             {
-                "title": "She Found 5 Years of Lies in 30 Seconds 💔 #Shorts",
-                "hook": "Nobody warned her. She picked up his ringing phone and her entire world shattered.",
-                "dialogues": [
-                    {"speaker": "narrator", "text": "Nobody warned her. She picked up his ringing phone and her entire life shattered."},
-                    {"speaker": "female", "text": "Hello? Who is this? Why are you calling my husband at midnight?"},
-                    {"speaker": "narrator", "text": "The voice on the other end went silent, before whispering six chilling words."},
-                    {"speaker": "female", "text": "Your husband? Honey, he’s been married to me for seven years."},
-                    {"speaker": "male", "text": "Give me the phone! You were never supposed to answer that!"},
-                    {"speaker": "narrator", "text": "Two hundred photos. Another family. What would you do in her place? Comment below."}
-                ],
-                "description": "A shocking true story of betrayal that no wife should ever experience. When the person you trust most lives a complete double life. #YummyDramaz #Shorts #Drama #Betrayal #Story",
-                "tags": ["drama shorts", "betrayal story", "shocking story", "marriage betrayal", "true story", "drama", "shorts", "yummy dramaz", "cheating husband", "viral story", "emotional story", "relationship"],
-                "hashtags": ["#YummyDramaz", "#Shorts", "#Drama", "#Betrayal", "#ShockingStory"],
-                "search_keyword": "sad woman phone",
-                "thumbnail_text": "HE HAD TWO WIVES 😱",
-                "category": "Drama",
-                "category_id": "24"
+                "title": "Why Lions Are Terrified Of This Tiny Creature 🦡 #Shorts",
+                "hook": "This creature has thick biological armor, immunity to venom, and zero fear.",
+                "script": "This creature has thick biological armor, complete immunity to venom, and zero fear. The honey badger is so relentlessly aggressive that even prides of lions avoid fighting it. Its skin is thick enough to withstand machetes, bee stings, and porcupine quills. When bitten by a deadly king cobra, it simply takes a two-hour nap, digests the venom, and wakes up to finish eating the snake. Would you survive against this animal? Tell us below.",
+                "description": "Meet the honey badger — the world's most fearless mammal that fights lions and survives lethal snake venom. #AnimalFacts #WildLife #HoneyBadger #Nature #Shorts",
+                "tags": ["honey badger", "animal facts", "wildlife", "nature", "dangerous animals", "lion fight", "cobra venom", "shorts", "predator", "crazy animals", "wild animals", "fascinating facts"],
+                "hashtags": ["#AnimalFacts", "#HoneyBadger", "#WildLife", "#Nature", "#Shorts"],
+                "search_keyword": "badger wildlife",
+                "thumbnail_text": "FEARED BY LIONS 🦡",
+                "category": "Wild Predators",
+                "category_id": "15",
+                "pinned_comment": "💬 Who wins in a fight: 1 Honey Badger or 3 Wolves? Settle it below! 👇"
             },
             {
-                "title": "His Secret Family Was Finally Exposed 😳 #Shorts",
-                "hook": "For seven years, he thought he was her only husband. He was dead wrong.",
-                "dialogues": [
-                    {"speaker": "narrator", "text": "For seven years, he thought he was her only husband. He was dead wrong."},
-                    {"speaker": "male", "text": "Who is Karen? A lawyer just served divorce papers at our door!"},
-                    {"speaker": "female", "text": "It was never personal. You were just my backup plan."},
-                    {"speaker": "narrator", "text": "She packed her bags without shedding a single tear."},
-                    {"speaker": "male", "text": "Ten years together, and you feel nothing? Absolutely nothing?"},
-                    {"speaker": "narrator", "text": "She looked right into his eyes and smiled. Karma has no deadline."}
-                ],
-                "description": "When trust is shattered beyond repair. A shocking confrontation uncovering a double life. #YummyDramaz #Shorts #Drama #ShockingStory #TrueCrime",
-                "tags": ["shocking story", "drama shorts", "double life", "betrayal", "story time", "drama", "shorts", "yummy dramaz", "viral", "emotional", "true crime", "relationship drama"],
-                "hashtags": ["#YummyDramaz", "#Shorts", "#Drama", "#DoubleLife", "#Shocking"],
-                "search_keyword": "couple arguing",
-                "thumbnail_text": "DOUBLE LIFE EXPOSED 😳",
-                "category": "Drama",
-                "category_id": "24"
+                "title": "The Pistol Shrimp Can Boil Water In 1 Millisecond 🦐 #Shorts",
+                "hook": "This tiny shrimp produces temperatures hotter than the surface of the sun.",
+                "script": "This tiny shrimp produces temperatures hotter than the surface of the sun. The pistol shrimp snaps its claw so fast that it creates a cavitation bubble traveling at sixty miles per hour. When the bubble collapses, it generates a flash of light, an ear-splitting sound of two hundred and eighteen decibels, and temperatures exceeding eight thousand degrees. It literally boils prey alive in one millisecond. Nature is unbelievable.",
+                "description": "The pistol shrimp shoots underwater shockwaves hotter than the sun to vaporize its prey. #AnimalFacts #OceanLife #PistolShrimp #DeepSea #Shorts",
+                "tags": ["pistol shrimp", "ocean facts", "animal facts", "deep sea", "sea creatures", "crazy nature", "shrimp punch", "marine biology", "shorts", "wildlife", "facts"],
+                "hashtags": ["#AnimalFacts", "#OceanLife", "#PistolShrimp", "#Nature", "#Shorts"],
+                "search_keyword": "underwater ocean",
+                "thumbnail_text": "HOTTER THAN SUN 🦐",
+                "category": "Marine Life",
+                "category_id": "15",
+                "pinned_comment": "🌊 Did you know ocean creatures had this superpower? Tell us your favorite sea animal! 👇"
             },
             {
-                "title": "Dark Psychology: How Toxic People Hook You 🧠 #Shorts",
-                "hook": "If someone does this to you, run immediately. They are weaponizing your emotions.",
-                "dialogues": [
-                    {"speaker": "narrator", "text": "If someone does this to you, run immediately. They are weaponizing your emotions."},
-                    {"speaker": "male", "text": "You're crazy! I never said that. You're imagining things again."},
-                    {"speaker": "female", "text": "Why do you always make me feel like I am losing my mind?"},
-                    {"speaker": "narrator", "text": "This psychological tactic is called intermittent reinforcement. They break you down, then love-bomb you."},
-                    {"speaker": "narrator", "text": "Your brain gets addicted to their validation like a drug. Have you ever experienced this?"}
-                ],
-                "description": "Dark psychology tactics that toxic and narcissistic people use to control and manipulate those around them. #YummyDramaz #Shorts #Psychology #Manipulation #DarkPsychology",
-                "tags": ["dark psychology", "toxic relationship", "narcissist", "manipulation tactics", "psychology shorts", "drama", "shorts", "yummy dramaz", "mental health", "toxic people", "red flags", "self improvement"],
-                "hashtags": ["#YummyDramaz", "#Shorts", "#DarkPsychology", "#Manipulation", "#ToxicRelationship"],
-                "search_keyword": "dark room shadow",
-                "thumbnail_text": "THEY CONTROL YOU 🧠",
-                "category": "Psychology",
-                "category_id": "24"
+                "title": "Peregrine Falcon: The Fastest Creature On Earth 🦅 #Shorts",
+                "hook": "This bird dives faster than a Formula One race car.",
+                "script": "This bird dives faster than a Formula One race car. When hunting in mid-air, the peregrine falcon folds its wings and enters a supersonic dive reaching over two hundred and forty miles per hour. At that speed, air pressure would rupture human lungs, but the falcon has specialized nostrils that baffle airflow. The impact of its strike knocks prey unconscious instantly before it even knows what hit it. Is this the ultimate predator?",
+                "description": "Reaching over 240 mph, the Peregrine Falcon is the fastest hunter in the history of planet Earth. #AnimalFacts #Falcon #BirdsOfPrey #Speed #Shorts",
+                "tags": ["peregrine falcon", "fastest animal", "birds of prey", "eagle", "falcon dive", "wildlife", "animal facts", "nature", "shorts", "predator", "speed of light"],
+                "hashtags": ["#AnimalFacts", "#PeregrineFalcon", "#WildLife", "#FastestAnimal", "#Shorts"],
+                "search_keyword": "falcon eagle flying",
+                "thumbnail_text": "240 MPH DIVE 🦅",
+                "category": "Birds of Prey",
+                "category_id": "15",
+                "pinned_comment": "🦅 Could any modern jet out-maneuver a Peregrine Falcon? Comment your thoughts! 👇"
             },
             {
-                "title": "She Waited 10 Years For This Revenge 😤 #Shorts",
-                "hook": "She smiled at her arrogant ex in the boardroom. He had no idea she owned the building.",
-                "dialogues": [
-                    {"speaker": "narrator", "text": "She smiled at her arrogant ex in the boardroom. He had no clue she owned the entire company."},
-                    {"speaker": "male", "text": "What are you doing in the CEO seat? Get out before security removes you!"},
-                    {"speaker": "female", "text": "Ten years ago, you stole my life savings and left me with nothing."},
-                    {"speaker": "narrator", "text": "She slid the termination contract across the polished marble desk."},
-                    {"speaker": "female", "text": "Today, I sign your termination letter. Security is already behind you."},
-                    {"speaker": "narrator", "text": "Revenge is a dish best served cold. Like and subscribe for more drama!"}
-                ],
-                "description": "A story of patience, quiet rebuilding, and ultimate poetic justice. #YummyDramaz #Shorts #Revenge #Drama #Story",
-                "tags": ["revenge story", "drama shorts", "karma story", "shocking ending", "story time", "drama", "shorts", "yummy dramaz", "viral story", "emotional", "revenge", "satisfying"],
-                "hashtags": ["#YummyDramaz", "#Shorts", "#Revenge", "#Drama", "#KarmaStory"],
-                "search_keyword": "luxury office building",
-                "thumbnail_text": "10 YEAR REVENGE 😤",
-                "category": "Revenge",
-                "category_id": "24"
+                "title": "Octopus Secrets That Terrify Marine Biologists 🐙 #Shorts",
+                "hook": "Nine brains, three hearts, and blue copper blood. This creature is practically an alien.",
+                "script": "Nine brains, three hearts, and blue copper blood. The octopus is practically an alien living in our oceans. Two-thirds of its neurons reside inside its arms, allowing each tentacle to think, taste, and solve puzzles independently. They can change color, texture, and shape in two hundred milliseconds to blend invisibly into coral. Many scientists believe octopuses arrived through panspermia from outer space. What do you think?",
+                "description": "With 9 brains and decentralized intelligence, octopuses are the closest thing to extraterrestrial life on Earth. #AnimalFacts #Octopus #OceanMysteries #SeaLife #Shorts",
+                "tags": ["octopus", "alien creature", "ocean mysteries", "animal facts", "sea life", "marine biology", "tentacles", "shorts", "nature", "crazy animals", "underwater"],
+                "hashtags": ["#AnimalFacts", "#Octopus", "#OceanLife", "#WildLife", "#Shorts"],
+                "search_keyword": "octopus underwater",
+                "thumbnail_text": "9 BRAINS 3 HEARTS 🐙",
+                "category": "Marine Mysteries",
+                "category_id": "15",
+                "pinned_comment": "🐙 Do you believe octopuses evolved on Earth, or are they alien? Vote in the comments! 👇"
             }
         ]
         selected = random.choice(pool)

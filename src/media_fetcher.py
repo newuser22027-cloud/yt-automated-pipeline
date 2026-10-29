@@ -1,6 +1,6 @@
 """
-Media Fetcher Module — UPGRADED v3.2 (Multi-Scene Footage Montage)
-Fetches multiple distinct HD stock video clips matching the drama theme
+Media Fetcher Module — UPGRADED v5.0 (Animals & Wildlife Footage Edition)
+Fetches high-definition wildlife, animal predators, ocean, and nature stock video
 from Mixkit (Zero API key), Pixabay, or Pexels for fast-paced visual cuts.
 """
 
@@ -16,15 +16,14 @@ from utils.logger import logger
 
 
 class MediaFetcher:
-    """Fetches high-quality HD stock video footage with multi-scene capabilities."""
+    """Fetches high-quality HD animal and wildlife video footage with multi-scene cuts."""
 
     KEYWORD_MAP = {
-        "drama": ["drama", "couple", "argument", "crying", "angry", "sad", "walking-away", "breakup"],
-        "luxury": ["luxury", "mansion", "money", "supercar", "office", "lifestyle", "wealth"],
-        "mystery": ["shadow", "dark", "night", "mystery", "detective", "silhouette", "alone"],
-        "psychology": ["brain", "thinking", "mind", "shadow", "abstract", "human", "face"],
-        "city": ["city", "traffic", "skyline", "architecture", "street", "night-city"],
-        "space": ["space", "stars", "galaxy", "nebula", "astronaut", "universe"]
+        "animals": ["animals", "wildlife", "lion", "tiger", "bear", "wolf", "cheetah", "leopard", "safari"],
+        "nature": ["forest", "jungle", "river", "mountain", "trees", "waterfall", "storm", "nature"],
+        "ocean": ["ocean", "underwater", "fish", "shark", "whale", "coral", "deep-sea", "marine"],
+        "birds": ["eagle", "falcon", "bird", "flying", "hawk", "owl", "sky"],
+        "predators": ["hunting", "running", "chase", "danger", "wildlife", "predator"]
     }
 
     HEADERS = {
@@ -36,16 +35,13 @@ class MediaFetcher:
         self.pixabay_key = pixabay_key or config.pixabay_api_key
 
     def fetch_multiple_videos(self, keyword: str, count: int = 4) -> List[Path]:
-        """
-        Retrieves multiple distinct HD stock clips for multi-scene fast cuts.
-        """
+        """Retrieves multiple distinct HD stock clips for multi-scene fast cuts."""
         temp_scenes_dir = config.temp_dir / "scenes"
         temp_scenes_dir.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"🎬 Querying {count} distinct stock video scenes for '{keyword}'...")
+        logger.info(f"🐾 Querying {count} distinct wildlife video scenes for '{keyword}'...")
 
         category = self._map_keyword_to_category(keyword)
-        # Pull candidate video URLs
         urls = self._fetch_mixkit_multiple_urls(category, count=count * 2)
 
         saved_clips: List[Path] = []
@@ -64,15 +60,15 @@ class MediaFetcher:
             single = self.fetch_video(keyword)
             return [single]
 
-        logger.info(f"✅ Successfully downloaded {len(saved_clips)} distinct footage scenes!")
+        logger.info(f"✅ Successfully downloaded {len(saved_clips)} distinct animal footage scenes!")
         return saved_clips
 
     def fetch_video(self, keyword: str, output_path: Optional[Path] = None) -> Path:
-        """Retrieves a single HD stock video."""
+        """Retrieves a single HD wildlife stock video."""
         output_path = output_path or (config.temp_dir / "background.mp4")
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        logger.info(f"Querying single stock video for: '{keyword}'")
+        logger.info(f"Querying single animal video for: '{keyword}'")
         try:
             category = self._map_keyword_to_category(keyword)
             mixkit_url = self._fetch_mixkit_video_url(category)
@@ -85,17 +81,21 @@ class MediaFetcher:
         return self._create_procedural_fallback(output_path)
 
     def _map_keyword_to_category(self, keyword: str) -> str:
-        """Finds closest Mixkit category."""
+        """Finds closest Mixkit category for animals/nature."""
         kw = keyword.lower()
+        if any(w in kw for w in ["ocean", "shrimp", "octopus", "fish", "whale", "water"]):
+            return "nature"
+        if any(w in kw for w in ["falcon", "eagle", "bird", "fly"]):
+            return "nature"
         for cat, synonyms in self.KEYWORD_MAP.items():
             if any(s in kw for s in synonyms) or cat in kw:
                 return cat
-        return random.choice(["luxury", "city", "drama", "mystery"])
+        return random.choice(["nature", "animals", "forest"])
 
     def _fetch_mixkit_multiple_urls(self, category: str, count: int = 6) -> List[str]:
-        """Scrapes multiple 720p HD MP4 download links from Mixkit category pages."""
+        """Scrapes free 720p HD MP4 download links from Mixkit nature/animal category pages."""
         urls = []
-        categories_to_try = [category, "luxury", "city", "business", "lifestyle"]
+        categories_to_try = ["nature", "animals", "ocean", "forest", "wildlife"]
         
         for cat in categories_to_try:
             page_url = f"https://mixkit.co/free-stock-video/{cat}/"
@@ -136,7 +136,7 @@ class MediaFetcher:
         except ImportError:
             from moviepy.editor import ColorClip
 
-        clip = ColorClip(size=(1080, 1920), color=(15, 23, 42), duration=10)
+        clip = ColorClip(size=(1080, 1920), color=(10, 40, 20), duration=10)
         clip.write_videofile(str(target_file), fps=24, codec="libx264", preset="ultrafast", logger=None)
         clip.close()
         return target_file
@@ -144,5 +144,5 @@ class MediaFetcher:
 
 if __name__ == "__main__":
     fetcher = MediaFetcher()
-    clips = fetcher.fetch_multiple_videos("drama", count=3)
-    print(f"Downloaded {len(clips)} scenes.")
+    clips = fetcher.fetch_multiple_videos("lion animal", count=3)
+    print(f"Downloaded {len(clips)} animal scenes.")

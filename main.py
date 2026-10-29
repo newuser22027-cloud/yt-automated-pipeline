@@ -54,12 +54,12 @@ def execute_pipeline(
         logger.warning(f"   Analytics check skipped: {e}")
 
     # ── Step 1: Content Generation ────────────────────────────────────────────
-    logger.info("[1/5] 🧠 Generating drama script + SEO metadata...")
+    logger.info("[1/5] 🧠 Generating mind-blowing animal facts script + SEO metadata...")
     content = content_gen.generate(niche=niche)
 
     # Log what was generated
     logger.info(f"   📝 Title:    {content.get('title', 'N/A')}")
-    logger.info(f"   🎯 Category: {content.get('category', 'Drama')}")
+    logger.info(f"   🎯 Category: {content.get('category', 'Animals')}")
     logger.info(f"   🔍 Keyword:  {content.get('search_keyword', 'N/A')}")
 
     metadata_path = config.output_dir / "metadata.json"

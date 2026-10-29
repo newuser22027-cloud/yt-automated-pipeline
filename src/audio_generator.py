@@ -1,10 +1,8 @@
 """
-Audio Generator Module — UPGRADED v3.1 (Multi-Voice Acting & Seamless Concatenation)
-Supports:
-- Narrator Voice: en-US-ChristopherNeural (Deep, suspenseful, authoritative)
-- Male Character Voice: en-US-GuyNeural (Emotional, expressive male)
-- Female Character Voice: en-US-JennyNeural (Passionate, emotive female)
-- Stitching with micro-pauses (< 0.2s) between dialogue lines
+Audio Generator Module — UPGRADED v5.0 (Wildlife Documentary Narration Edition)
+- Strict 0.2s pause limit: sentences cleaned and tightly joined
+- Rate tuned to +14% energetic speed for maximum YouTube Shorts watch-time
+- BBC / National Geographic style authoritative, deep baritone voice
 """
 
 import re
@@ -13,7 +11,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 import edge_tts
 
-# MoviePy audio clip for seamless concatenation
+# Universal MoviePy imports
 try:
     from moviepy.editor import AudioFileClip, concatenate_audioclips
 except ImportError:
@@ -23,134 +21,79 @@ from src.config import config
 from utils.logger import logger
 
 
-# Character Voice Roster (Deep Dramatic Thriller Neural Voices)
-VOICE_MAP = {
-    "narrator": "en-US-ChristopherNeural",  # Deep, suspenseful cinema baritone
-    "male":     "en-US-EricNeural",         # Intense, dramatic male
-    "female":   "en-US-AriaNeural"          # Emotional, expressive high-tension female
-}
+# Best authoritative, deep, cinematic documentary voices
+DOCUMENTARY_VOICE = "en-US-ChristopherNeural"  # Deep, resonant, cinematic documentary baritone
+FALLBACK_VOICE = "en-US-GuyNeural"
 
 
 class AudioGenerator:
-    """Handles multi-character neural voice synthesis via edge-tts."""
+    """Handles high-retention documentary voiceover synthesis with ultra-tight 0.2s pauses."""
 
     def __init__(self, default_voice: Optional[str] = None):
-        self.default_voice = default_voice or config.tts_voice
+        self.default_voice = default_voice or DOCUMENTARY_VOICE
 
     def _clean_for_tts(self, text: str) -> str:
-        """Cleans text to avoid awkward pauses."""
+        """
+        Cleans text to strictly eliminate pauses longer than 0.2s:
+        - Strips punctuation that causes long 0.5s+ pauses (commas, colons, semicolons, dashes)
+        - Removes parenthetical remarks
+        - Normalizes whitespace into single space
+        """
         text = re.sub(r'[*_#`~]', '', text)
-        text = re.sub(r'\s+', ' ', text).strip()
-        text = re.sub(r'[—–]', ',', text)
-        text = re.sub(r'([.!?])\s{2,}', r'\1 ', text)
+        # Remove commas, semicolons, em-dashes that introduce unnatural 0.4s pauses
+        text = re.sub(r'[,;—–]', ' ', text)
+        # Remove ellipsis
         text = re.sub(r'\.{2,}', '.', text)
+        # Remove text in parentheses
         text = re.sub(r'\([^)]*\)', '', text)
+        # Collapse multi-spaces into single space
+        text = re.sub(r'\s+', ' ', text).strip()
+        # Keep only single full stop or question mark for essential intonation
+        text = re.sub(r'([.?!])\s*', r'\1 ', text)
         return text.strip()
 
     async def _synthesize_line(self, text: str, voice: str, output_path: Path):
-        """Synthesizes a single dialogue line with custom emotion tuning."""
+        """Synthesizes voiceover with cinematic pacing and zero dead air."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Dynamic pitch and rate based on character role
-        if "Christopher" in voice:
-            # Narrator: deeper, deliberate, cinematic tension (-3Hz, +8% speed)
-            rate_val = "+8%"
-            pitch_val = "-3Hz"
-        elif "Aria" in voice:
-            # Female high-emotion: faster, urgent, intense (+14% speed, +2Hz)
-            rate_val = "+14%"
-            pitch_val = "+2Hz"
-        else:
-            # Male confrontational: punchy, direct (+12% speed, -1Hz)
-            rate_val = "+12%"
-            pitch_val = "-1Hz"
-
+        # Rate +14% ensures punchy pace, pitch -2Hz adds deep authoritative resonance
         communicate = edge_tts.Communicate(
             text=text,
             voice=voice,
-            rate=rate_val,
-            pitch=pitch_val,
+            rate="+14%",
+            pitch="-2Hz",
             volume="+12%"
         )
         await communicate.save(str(output_path))
 
-    async def synthesize_dialogues_async(self, dialogues: List[Dict[str, str]], output_path: Path) -> Path:
-        """
-        Synthesizes each dialogue line with the character's designated voice,
-        then stitches them together seamlessly.
-        """
+    async def synthesize_async(self, text: str, output_path: Path) -> Path:
+        """Synthesizes text into high-impact documentary voiceover."""
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        temp_audio_dir = config.temp_dir / "dialogues_audio"
-        temp_audio_dir.mkdir(parents=True, exist_ok=True)
+        cleaned_text = self._clean_for_tts(text)
+        logger.info(f"🎙️ Synthesizing documentary voiceover ({len(cleaned_text)} chars) with 0.2s pause limit...")
+        await self._synthesize_line(cleaned_text, self.default_voice, output_path)
 
-        segment_paths: List[Path] = []
+        if not output_path.exists() or output_path.stat().st_size == 0:
+            raise RuntimeError(f"Audio synthesis failed: {output_path} is empty or missing.")
 
-        logger.info(f"🎭 Synthesizing multi-character audio ({len(dialogues)} dialogue turns)...")
-
-        for idx, line in enumerate(dialogues):
-            speaker = str(line.get("speaker", "narrator")).lower().strip()
-            voice = VOICE_MAP.get(speaker, VOICE_MAP["narrator"])
-            raw_text = line.get("text", "").strip()
-            cleaned_text = self._clean_for_tts(raw_text)
-
-            if not cleaned_text:
-                continue
-
-            seg_file = temp_audio_dir / f"line_{idx:02d}_{speaker}.mp3"
-            logger.info(f"   [{idx+1}/{len(dialogues)}] Voice '{voice}' ({speaker}): \"{cleaned_text[:35]}...\"")
-            await self._synthesize_line(cleaned_text, voice, seg_file)
-
-            if seg_file.exists() and seg_file.stat().st_size > 0:
-                segment_paths.append(seg_file)
-
-        if not segment_paths:
-            raise RuntimeError("No dialogue audio lines were successfully generated.")
-
-        # Stitch all segments together using MoviePy
-        clips = []
-        try:
-            for p in segment_paths:
-                clips.append(AudioFileClip(str(p)))
-
-            logger.info(f"Stitching {len(clips)} dialogue audio clips seamlessly...")
-            combined = concatenate_audioclips(clips)
-            combined.write_audiofile(
-                str(output_path),
-                fps=44100,
-                nbytes=2,
-                codec="libmp3lame",
-                logger=None
-            )
-        finally:
-            for c in clips:
-                try:
-                    c.close()
-                except Exception:
-                    pass
-
-        logger.info(f"✅ Multi-voice audio track generated: {output_path} ({output_path.stat().st_size} bytes)")
+        logger.info(f"✅ Documentary voiceover saved: {output_path.name} ({output_path.stat().st_size} bytes)")
         return output_path
 
-    def generate_dialogues(self, dialogues: List[Dict[str, str]], output_filename: str = "voiceover.mp3") -> Path:
-        """Synchronous wrapper for multi-character dialogue generation."""
-        out_file = config.temp_dir / output_filename
-        return asyncio.run(self.synthesize_dialogues_async(dialogues, out_file))
-
     def generate(self, text: str, output_filename: str = "voiceover.mp3") -> Path:
-        """Fallback for plain single-text generation."""
-        dialogues = [{"speaker": "narrator", "text": text}]
-        return self.generate_dialogues(dialogues, output_filename)
+        """Synchronous wrapper around synthesize_async."""
+        out_file = config.temp_dir / output_filename
+        return asyncio.run(self.synthesize_async(text, out_file))
+
+    def generate_dialogues(self, dialogues: List[Dict[str, str]], output_filename: str = "voiceover.mp3") -> Path:
+        """Combines all script parts into single seamless documentary narration."""
+        full_text = " ".join([d.get("text", "").strip() for d in dialogues if d.get("text")])
+        return self.generate(full_text, output_filename)
 
 
 if __name__ == "__main__":
     audio_gen = AudioGenerator()
-    test_dialogues = [
-        {"speaker": "narrator", "text": "Nobody warned her. She grabbed his phone."},
-        {"speaker": "female", "text": "Who is Karen? Why are there photos of three kids?"},
-        {"speaker": "male", "text": "Put that down! You were never supposed to see that!"},
-        {"speaker": "narrator", "text": "His secret was out. Karma had arrived."}
-    ]
-    res = audio_gen.generate_dialogues(test_dialogues, "test_multi_voice.mp3")
-    print(f"Generated multi-voice test at: {res}")
+    test_script = "This creature has thick biological armor and complete immunity to venom. The honey badger is so relentlessly aggressive that even prides of lions avoid fighting it."
+    res = audio_gen.generate(test_script, "test_animal_audio.mp3")
+    print(f"Generated documentary audio at: {res}")

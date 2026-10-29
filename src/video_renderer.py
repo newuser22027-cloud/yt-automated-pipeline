@@ -509,7 +509,7 @@ class VideoRenderer:
             )
 
             font = self._get_font(32)
-            draw.text((w // 2, h // 2), "🔔 SUBSCRIBE FOR NEXT EPISODE", font=font,
+            draw.text((w // 2, h // 2), "🐾 SUBSCRIBE FOR DAILY ANIMAL FACTS!", font=font,
                       fill=(255, 255, 255, 255), anchor="mm")
 
             tmp = config.temp_dir / "subscribe_banner.png"
@@ -547,12 +547,14 @@ class VideoRenderer:
         current_time = 0.0
         font_main = self._get_font(68)
 
-        # Contextual emotional emojis for drama
+        # Contextual emotional emojis for animal facts & nature
         EMOJI_KEYWORDS = {
-            "SECRET": "🤫", "FAMILY": "👨‍👩‍👧", "WIFE": "👰", "HUSBAND": "💍",
-            "DIVORCE": "💔", "PAPERS": "📄", "LIES": "🤥", "PHONE": "📱",
-            "MONEY": "💰", "REVENGE": "🔥", "DEAD": "💀", "WRONG": "❌",
-            "MIDNIGHT": "🌙", "NOTHING": "🚫", "SECURITY": "👮", "COLD": "❄️"
+            "LION": "🦁", "TIGER": "🐯", "BEAR": "🐻", "WOLF": "🐺",
+            "SHARK": "🦈", "OCTOPUS": "🐙", "EAGLE": "🦅", "FALCON": "🦅",
+            "SNAKE": "🐍", "VENOM": "☠️", "POISON": "🧪", "DEADLY": "💀",
+            "KILL": "⚡", "SPEED": "🚀", "SURVIVE": "🛡️", "BRAIN": "🧠",
+            "FIRE": "🔥", "COLD": "❄️", "WATER": "🌊", "CREATURE": "🐾",
+            "MONSTER": "👹", "POWER": "⚡", "DANGER": "⚠️", "TEETH": "🦷"
         }
 
         for idx, chunk in enumerate(chunks):

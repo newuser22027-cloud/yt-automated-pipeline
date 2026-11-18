@@ -30,6 +30,8 @@ wheels/
 client_secret*.json
 token.json
 credentials.json
+update_token.py
+UPDATE_YOUTUBE_TOKEN.bat
 
 # Generated Media Assets
 *.mp4
